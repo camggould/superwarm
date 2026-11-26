@@ -43,6 +43,9 @@ enum Command {
         year: Option<i32>,
         #[arg(long)]
         json: bool,
+        /// Also write a shareable summary card as SVG (`-` for stdout). Leaves out project names.
+        #[arg(long, value_name = "FILE.svg")]
+        card: Option<PathBuf>,
     },
     /// Everything the macOS app shows, as one JSON document
     Snapshot {
@@ -222,12 +225,25 @@ fn main() -> Result<()> {
                 print!("{}", render::report(&ui(options.color), &view));
             }
         }
-        Command::Year { year, json } => {
+        Command::Year { year, json, card } => {
             let loaded = load(options, now_ms);
             let year = year
                 .or_else(|| seasonal_year(now_ms, &Local))
                 .unwrap_or_else(|| chrono::Datelike::year(&local_naive(&Local, now_ms)));
             let review = YearInReview::new(&loaded.report, year, &Local);
+            if let Some(path) = card {
+                let svg = superwarm::card::svg(&review, &loaded.report.model.grid, &settings);
+                if path.as_os_str() == "-" {
+                    print!("{svg}");
+                    return Ok(());
+                }
+                std::fs::write(&path, svg)?;
+                eprintln!(
+                    "Wrote {}: open it in a browser, or convert it with `rsvg-convert -o card.png {}`.",
+                    path.display(),
+                    path.display()
+                );
+            }
             if json {
                 println!("{}", serde_json::to_string_pretty(&review)?);
             } else {

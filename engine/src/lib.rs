@@ -3,6 +3,7 @@
 //!
 //! The model and every coefficient are documented in docs/METHODOLOGY.md.
 
+pub mod card;
 pub mod catalog;
 pub mod citations;
 pub mod claude;
