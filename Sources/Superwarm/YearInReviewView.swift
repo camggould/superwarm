@@ -207,6 +207,8 @@ enum SlideDeck {
             headline: "\(trees) \(trees == 1 ? "tree" : "trees")",
             caption: "growing for a decade each. Choosing smaller models when they're enough keeps this number down."
         ))
+        slides.append(Slide(id: "share", background: soil, lightText: true, kicker: "Share your year",
+                            headline: "", caption: ""))
         return slides
     }
 
@@ -350,18 +352,25 @@ struct YearInReviewView: View {
     static let size = CGSize(width: 520, height: 640)
 
     var body: some View {
-        let slides = currentSlides
+        let review = currentReview
+        let slides = review.map { SlideDeck.make($0, settings: model.settings) } ?? []
         Group {
-            if slides.isEmpty {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
+            if let review, !slides.isEmpty {
                 let i = min(index, slides.count - 1)
-                SlideView(slide: slides[i], index: i, count: slides.count)
-                    .id(slides[i].id)
-                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                            removal: .opacity))
-                    .contentShape(Rectangle())
-                    .onTapGesture { advance(count: slides.count) }
+                Group {
+                    if slides[i].id == "share" {
+                        SharePage(review: review, settings: model.settings, index: i, count: slides.count)
+                    } else {
+                        SlideView(slide: slides[i], index: i, count: slides.count)
+                            .contentShape(Rectangle())
+                            .onTapGesture { advance(count: slides.count) }
+                    }
+                }
+                .id(slides[i].id)
+                .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
+                                        removal: .opacity))
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(width: Self.size.width, height: Self.size.height)
@@ -377,10 +386,10 @@ struct YearInReviewView: View {
         }
     }
 
-    private var currentSlides: [Slide] {
-        guard let report = model.report else { return [] }
+    private var currentReview: YearInReview? {
+        guard let report = model.report else { return nil }
         let year = YearInReview.seasonalYear() ?? Calendar.current.component(.year, from: Date())
-        return SlideDeck.make(YearInReview(report: report, year: year), settings: model.settings)
+        return YearInReview(report: report, year: year)
     }
 
     private func advance(count: Int) {
@@ -390,5 +399,190 @@ struct YearInReviewView: View {
         } else {
             withAnimation(.easeInOut(duration: 0.35)) { index += 1 }
         }
+    }
+}
+
+// MARK: - Shareable summary
+
+/// A portrait 4:5 summary card (1080×1350 px at 2×) meant to be shared as an image.
+/// Deliberately leaves out project names, which can be private.
+struct ShareCard: View {
+    let review: YearInReview
+    let settings: AppSettings
+
+    static let size = CGSize(width: 540, height: 675)
+
+    private func units(_ id: String) -> Double {
+        Equivalents.named(id, grid: settings.grid, settings: settings.equivalents)?.units(for: review.totalGrams) ?? 0
+    }
+
+    private var saved: Double { max(0, review.counterfactual.onReferenceModels - review.counterfactual.actual) }
+
+    private var stats: [(String, String, String)] {
+        let flight = units("flight-nyc-la")
+        return [
+            ("house.fill", SlideDeck.friendly(units("home-day")), "days of home power"),
+            ("airplane", flight >= 1 ? SlideDeck.friendly(flight) : SlideDeck.percent(flight), flight >= 1 ? "flights NYC → LA" : "of a flight NYC → LA"),
+            ("iphone.gen3", SlideDeck.friendly(units("phone")), "iPhone charges"),
+            ("text.book.closed.fill", Format.tokens(review.tokensRead), "tokens read"),
+            ("pencil.line", SlideDeck.friendly(review.novelsWritten), "novels' worth written"),
+            ("flame.fill", "\(review.longestStreak)", "days in a row, longest streak"),
+        ]
+    }
+
+    var body: some View {
+        let r = review
+        let sand = SlideDeck.sand
+
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(nsImage: Logo.template(size: 22))
+                    .foregroundStyle(Color(red: 0.88, green: 0.52, blue: 0.32))
+                Text("Superwarm").font(.system(size: 17, weight: .semibold))
+                Spacer()
+                Text(String(r.year)).font(.system(size: 17, weight: .semibold)).opacity(0.7)
+            }
+            Spacer(minLength: 18).frame(maxHeight: 64)
+            Text("My year of AI coding emitted")
+                .font(.system(size: 18, weight: .medium))
+                .opacity(0.75)
+            Text("\(Format.grams(r.totalGrams)) CO₂e")
+                .font(.system(size: 64, weight: .bold))
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+            Text("across \(Format.count(Double(r.summary.responses))) responses, likely \(Format.grams(r.summary.footprint.co2Grams.low))–\(Format.grams(r.summary.footprint.co2Grams.high))")
+                .font(.system(size: 14))
+                .opacity(0.65)
+
+            if saved > 0 {
+                HStack(spacing: 10) {
+                    Image(systemName: "leaf.fill").font(.system(size: 20))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Newer models kept \(Format.grams(saved)) out of the air")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("\(Int((saved / max(r.counterfactual.onReferenceModels, 1e-9) * 100).rounded()))% less than the same work on 2024's models")
+                            .font(.system(size: 13))
+                            .opacity(0.85)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background(SlideDeck.moss, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.top, 22)
+            }
+
+            Text("That's about").font(.system(size: 14, weight: .medium)).opacity(0.6)
+                .padding(.top, 36)
+                .padding(.bottom, 10)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .topLeading), count: 3),
+                      alignment: .leading, spacing: 18) {
+                ForEach(stats, id: \.2) { symbol, value, label in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Image(systemName: symbol)
+                            .font(.system(size: 15))
+                            .frame(height: 18, alignment: .bottomLeading)
+                            .opacity(0.8)
+                        Text(value)
+                            .font(.system(size: 24, weight: .bold))
+                            .monospacedDigit()
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        Text(label)
+                            .font(.system(size: 12))
+                            .opacity(0.7)
+                            .lineLimit(2)
+                    }
+                }
+            }
+            Spacer(minLength: 18)
+            Text("Estimates from local coding-agent logs. Sources: Epoch AI, Google, EPA, EIA, Our World in Data.")
+                .font(.system(size: 10.5))
+                .opacity(0.5)
+        }
+        .foregroundStyle(sand)
+        .padding(34)
+        .frame(width: Self.size.width, height: Self.size.height)
+        .background(SlideDeck.soil)
+    }
+
+    /// The card as a 1080×1350 image.
+    @MainActor
+    static func image(review: YearInReview, settings: AppSettings) -> NSImage? {
+        let renderer = ImageRenderer(content: ShareCard(review: review, settings: settings).environment(\.colorScheme, .dark))
+        renderer.scale = 2
+        return renderer.nsImage
+    }
+
+    static func pngData(_ image: NSImage) -> Data? {
+        guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return rep.representation(using: .png, properties: [:])
+    }
+}
+
+/// The final slide: the card plus save, copy and share actions.
+struct SharePage: View {
+    let review: YearInReview
+    let settings: AppSettings
+    let index: Int
+    let count: Int
+    @State private var copied = false
+
+    var body: some View {
+        let image = ShareCard.image(review: review, settings: settings)
+        VStack(spacing: 16) {
+            HStack(spacing: 4) {
+                ForEach(0..<count, id: \.self) { _ in
+                    Capsule().fill(.white.opacity(0.9)).frame(height: 3)
+                }
+            }
+            ShareCard(review: review, settings: settings)
+                .scaleEffect(0.72)
+                .frame(width: ShareCard.size.width * 0.72, height: ShareCard.size.height * 0.72)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+            HStack(spacing: 10) {
+                Button {
+                    save(image)
+                } label: {
+                    Label("Save Image…", systemImage: "square.and.arrow.down")
+                }
+                Button {
+                    copy(image)
+                } label: {
+                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                }
+                if let image {
+                    ShareLink(item: Image(nsImage: image),
+                              preview: SharePreview("My \(String(review.year)) in carbon", image: Image(nsImage: image))) {
+                        Label("Share…", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+            .controlSize(.large)
+            .buttonStyle(.borderedProminent)
+            .tint(SlideDeck.moss)
+        }
+        .padding(.horizontal, 36)
+        .padding(.top, 36)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(SlideDeck.soil)
+    }
+
+    private func save(_ image: NSImage?) {
+        guard let image, let data = ShareCard.pngData(image) else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "Superwarm-\(String(review.year)).png"
+        if panel.runModal() == .OK, let url = panel.url {
+            try? data.write(to: url)
+        }
+    }
+
+    private func copy(_ image: NSImage?) {
+        guard let image else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+        copied = true
     }
 }

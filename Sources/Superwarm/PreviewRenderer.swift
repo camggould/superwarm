@@ -47,12 +47,22 @@ enum PreviewRenderer {
         await model.refresh()
         guard let report = model.report else { return }
         let year = YearInReview.seasonalYear() ?? Calendar.current.component(.year, from: Date())
-        let slides = SlideDeck.make(YearInReview(report: report, year: year), settings: model.settings)
-        for (index, slide) in slides.enumerated() {
+        let review = YearInReview(report: report, year: year)
+        let slides = SlideDeck.make(review, settings: model.settings)
+        if let card = ShareCard.image(review: review, settings: model.settings), let png = ShareCard.pngData(card) {
+            try? png.write(to: URL(fileURLWithPath: "\(base)-share-card.png"))
+        }
+        for (index, slide) in slides.enumerated() where slide.id != "share" {
             let view = SlideView(slide: slide, index: index, count: slides.count)
                 .frame(width: YearInReviewView.size.width, height: YearInReviewView.size.height)
             await snapshot(view, size: YearInReviewView.size, appearance: .aqua,
                            to: "\(base)-\(String(format: "%02d", index))-\(slide.id).png")
+        }
+        if let index = slides.firstIndex(where: { $0.id == "share" }) {
+            let page = SharePage(review: review, settings: model.settings, index: index, count: slides.count)
+                .frame(width: YearInReviewView.size.width, height: YearInReviewView.size.height)
+            await snapshot(page, size: YearInReviewView.size, appearance: .darkAqua,
+                           to: "\(base)-\(String(format: "%02d", index))-share.png")
         }
     }
 
