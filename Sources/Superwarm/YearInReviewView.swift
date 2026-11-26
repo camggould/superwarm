@@ -37,7 +37,12 @@ enum SlideDeck {
         let grams = r.totalGrams
         let fp = r.summary.footprint
         let all = Equivalents.all(grid: settings.grid, settings: settings.equivalents)
-        func units(_ id: String) -> Double { all.first { $0.id == id }!.units(for: grams) }
+        func units(_ id: String, of amount: Double? = nil) -> Double { all.first { $0.id == id }!.units(for: amount ?? grams) }
+        /// Symbol, value and label for an equivalent of `amount` grams.
+        func item(_ id: String, _ label: String, of amount: Double? = nil) -> (String, String, String) {
+            let e = all.first { $0.id == id }!
+            return (e.symbol, friendly(e.units(for: amount ?? grams)), label)
+        }
         let monthName: [String] = DateFormatter().monthSymbols ?? []
 
         var slides: [Slide] = [
@@ -55,9 +60,47 @@ enum SlideDeck {
             headline: homeDays >= 1 ? "\(Format.count(homeDays)) days" : "\(Format.count(units("home-hour"))) hours",
             caption: "of electricity for an average US home.",
             accessory: .equivalents([
-                ("car.fill", Format.count(units("commute")), "commutes"),
-                ("fork.knife", Format.count(units("burger")), "beef burgers"),
-                ("play.tv.fill", Format.count(units("streaming")), "hours of streaming"),
+                item("commute", "commutes"),
+                item("burger", "beef burgers"),
+                item("gasoline", "gallons of gas"),
+            ])
+        ))
+
+        let flights = units("flight-nyc-la")
+        slides.append(Slide(
+            id: "flight", background: lake, lightText: true, kicker: "In the air, that's",
+            headline: flights >= 1 ? "\(friendly(flights)) flights" : "\(percent(flights)) of a flight",
+            caption: "from New York to LA, for one passenger. By train, the same carbon would take you \(friendly(units("train-km"))) km."
+        ))
+
+        let charges = units("phone")
+        let chargeDays = charges / 365.25
+        slides.append(Slide(
+            id: "phone", background: clay, lightText: true, kicker: "Or charging your iPhone",
+            headline: "\(friendly(charges)) times",
+            caption: chargeDays >= 1
+                ? "That's once a day for \(friendly(chargeDays)) years."
+                : "That's once a day for \(Int(charges.rounded())) days."
+        ))
+
+        let ledYears = units("led-year")
+        slides.append(Slide(
+            id: "led", background: soil, lightText: true, kicker: "Or leaving a light on",
+            headline: ledYears >= 1 ? "\(friendly(ledYears)) years" : "\(friendly(ledYears * 12)) months",
+            caption: "One LED bulb, burning day and night."
+        ))
+
+        slides.append(Slide(
+            id: "numbers", background: sand, lightText: false, kicker: "By the numbers",
+            headline: "Also about",
+            caption: "Same carbon, everyday things.",
+            accessory: .equivalents([
+                item("shower", "hot showers"),
+                item("kettle", "kettle boils"),
+                item("streaming", "hours of streaming"),
+                item("macbook", "MacBook charges"),
+                item("train-km", "km by train"),
+                item("us-day", "days of a US life"),
             ])
         ))
 
@@ -128,7 +171,12 @@ enum SlideDeck {
             slides.append(Slide(
                 id: "dividend", background: moss, lightText: true, kicker: "Newer models saved",
                 headline: Format.grams(r.dividendGrams),
-                caption: "\(Int((r.dividendGrams / baseline * 100).rounded()))% less than the same work on 2024-era models. Efficiency is real."
+                caption: "\(Int((r.dividendGrams / baseline * 100).rounded()))% less than the same work on 2024-era models. That's the same as skipping:",
+                accessory: .equivalents([
+                    item("phone", "iPhone charges", of: r.dividendGrams),
+                    item("shower", "hot showers", of: r.dividendGrams),
+                    item("commute", "commutes", of: r.dividendGrams),
+                ])
             ))
         }
 
@@ -139,6 +187,20 @@ enum SlideDeck {
             caption: "growing for a decade each. Choosing smaller models when they're enough keeps this number down."
         ))
         return slides
+    }
+
+    /// "0.4", "4.1", "1,854", "34,120", "1.2M".
+    static func friendly(_ n: Double) -> String {
+        let a = abs(n)
+        if a >= 1_000_000 { return String(format: "%.1fM", n / 1_000_000) }
+        if a >= 100 { return Int(n.rounded()).formatted(.number.grouping(.automatic)) }
+        if a >= 10 { return String(format: "%.0f", n) }
+        let text = String(format: "%.1f", n)
+        return text.hasSuffix(".0") ? String(text.dropLast(2)) : text
+    }
+
+    static func percent(_ fraction: Double) -> String {
+        "\(max(1, Int((fraction * 100).rounded())))%"
     }
 }
 
@@ -198,10 +260,13 @@ struct SlideView: View {
         case .none:
             EmptyView()
         case .equivalents(let items):
-            HStack(spacing: 28) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 18, alignment: .topLeading), count: 3),
+                      alignment: .leading, spacing: 20) {
                 ForEach(items, id: \.2) { symbol, value, label in
                     VStack(alignment: .leading, spacing: 2) {
-                        Image(systemName: symbol).font(.system(size: 16))
+                        Image(systemName: symbol)
+                            .font(.system(size: 18))
+                            .frame(height: 22, alignment: .bottomLeading)
                         Text(value).font(.system(size: 26, weight: .bold)).monospacedDigit()
                         Text(label).font(.system(size: 13)).opacity(0.75)
                     }
