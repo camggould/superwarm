@@ -130,7 +130,18 @@ fn load(options: &Options, now_ms: i64) -> Loaded {
     Loaded { report, scan, seconds: started.elapsed().as_secs_f64() }
 }
 
+/// Exit quietly when the reader goes away (`superwarm snapshot | head`), like
+/// other Unix tools, instead of panicking on a broken pipe.
+fn restore_default_sigpipe() {
+    #[cfg(unix)]
+    // SAFETY: called once at startup, before any threads or output.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
 fn main() -> Result<()> {
+    restore_default_sigpipe();
     let cli = Cli::parse();
     let now_ms = Local::now().timestamp_millis();
     let options = &cli.options;

@@ -621,6 +621,7 @@ dependencies = [
  "chrono",
  "clap",
  "dirs",
+ "libc",
  "memchr",
  "rayon",
  "regex",
