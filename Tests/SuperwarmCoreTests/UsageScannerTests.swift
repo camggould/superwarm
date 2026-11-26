@@ -30,7 +30,20 @@ import Testing
         #expect(report.byModel(in: nil).count == 2)
         #expect(report.byModel(in: nil).first?.profile.id == "claude-opus-4-5")
         #expect(report.byProject(in: nil).first?.name == "one")
-        #expect(Set(report.daily(in: Period.today.interval(now: now)).map(\.provider)) == [.claudeCode, .codex])
+        #expect(Set(report.timeline(in: Period.today.interval(now: now), by: .day).map(\.provider)) == [.claudeCode, .codex])
+    }
+
+    @Test func timelineBucketsByHour() {
+        let calendar = Calendar(identifier: .gregorian)
+        let base = calendar.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 9, minute: 10))!
+        let records = [0, 20, 70].map { minutes in
+            UsageRecord(id: "r\(minutes)", timestamp: base.addingTimeInterval(Double(minutes) * 60), provider: .claudeCode,
+                        model: "claude-opus-4-5", project: nil, tokens: TokenCounts(output: 1000))
+        }
+        let points = UsageReport(records: records, model: EmissionsModel()).timeline(in: nil, by: .hour, calendar: calendar)
+        #expect(points.count == 2)
+        #expect(abs(points[0].co2Grams - 2 * points[1].co2Grams) < 1e-9)
+        #expect(UsageReport.bucket(for: .today) == .hour)
     }
 
     @Test func cacheSkipsUnchangedFiles() throws {

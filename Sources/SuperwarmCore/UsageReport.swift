@@ -37,12 +37,13 @@ public struct Summary: Sendable {
     public var responses = 0
 }
 
-public struct DailyPoint: Sendable, Identifiable, Hashable {
-    public var day: Date
+public struct TimelinePoint: Sendable, Identifiable, Hashable {
+    /// Start of the bucket (hour, day, week or month).
+    public var start: Date
     public var provider: Provider
     public var co2Grams: Double
     public var energyWh: Double
-    public var id: String { "\(day.timeIntervalSince1970)-\(provider.rawValue)" }
+    public var id: String { "\(start.timeIntervalSince1970)-\(provider.rawValue)" }
 }
 
 public struct ModelBreakdown: Sendable, Identifiable {
@@ -113,17 +114,28 @@ public struct UsageReport: Sendable {
         return summary
     }
 
-    public func daily(in interval: DateInterval?, calendar: Calendar = .current) -> [DailyPoint] {
-        var buckets: [String: DailyPoint] = [:]
+    /// Natural chart resolution for each period.
+    public static func bucket(for period: Period) -> Calendar.Component {
+        switch period {
+        case .today: .hour
+        case .week, .month: .day
+        case .year: .weekOfYear
+        case .allTime: .month
+        }
+    }
+
+    /// CO2 and energy per time bucket and provider.
+    public func timeline(in interval: DateInterval?, by unit: Calendar.Component, calendar: Calendar = .current) -> [TimelinePoint] {
+        var buckets: [String: TimelinePoint] = [:]
         for entry in entries(in: interval) {
-            let day = calendar.startOfDay(for: entry.record.timestamp)
-            let key = "\(day.timeIntervalSince1970)-\(entry.record.provider.rawValue)"
-            var point = buckets[key] ?? DailyPoint(day: day, provider: entry.record.provider, co2Grams: 0, energyWh: 0)
+            let start = calendar.dateInterval(of: unit, for: entry.record.timestamp)?.start ?? entry.record.timestamp
+            let key = "\(start.timeIntervalSince1970)-\(entry.record.provider.rawValue)"
+            var point = buckets[key] ?? TimelinePoint(start: start, provider: entry.record.provider, co2Grams: 0, energyWh: 0)
             point.co2Grams += entry.footprint.co2Grams.central
             point.energyWh += entry.footprint.energyWh.central
             buckets[key] = point
         }
-        return buckets.values.sorted { ($0.day, $0.provider.rawValue) < ($1.day, $1.provider.rawValue) }
+        return buckets.values.sorted { ($0.start, $0.provider.rawValue) < ($1.start, $1.provider.rawValue) }
     }
 
     public func byModel(in interval: DateInterval?) -> [ModelBreakdown] {
