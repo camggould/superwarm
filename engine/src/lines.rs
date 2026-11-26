@@ -28,7 +28,7 @@ pub fn for_each_line_in(data: &[u8], needles: &[&[u8]], body: impl FnMut(&[u8]))
 }
 
 fn split(reader: impl Read, needles: &[&[u8]], mut body: impl FnMut(&[u8])) -> Result<()> {
-    let finders: Vec<Finder> = needles.iter().map(|n| Finder::new(n)).collect();
+    let finders: Vec<Finder> = needles.iter().map(Finder::new).collect();
     let mut reader = BufReader::with_capacity(1 << 20, reader);
     let mut line = Vec::with_capacity(64 * 1024);
     loop {
