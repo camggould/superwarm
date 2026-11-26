@@ -1,28 +1,43 @@
 import AppKit
 import SwiftUI
+import SuperwarmCore
 
 /// Renders the popover offscreen in light and dark mode, using real logs.
-/// `Superwarm --render-preview /tmp/superwarm` writes `-light.png` and `-dark.png`.
+/// `Superwarm --render-preview /tmp/superwarm` writes `-light.png`, `-dark.png` and `-month-light.png`.
+///
+/// The view is hosted in an offscreen window and snapshotted with
+/// `cacheDisplay`, so native AppKit controls (segmented picker, scroll view)
+/// render properly, which SwiftUI's ImageRenderer can't do.
 @MainActor
 enum PreviewRenderer {
     static func render(to base: String) async {
         let model = AppModel(autoRefresh: false)
         await model.refresh()
-        for (suffix, name) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-            guard let appearance = NSAppearance(named: name) else { continue }
-            NSApp.appearance = appearance
-            appearance.performAsCurrentDrawingAppearance {
-                let view = PopoverView()
+        let size = PopoverView.size
+        let variants: [(String, NSAppearance.Name, Period)] = [
+            ("light", .aqua, .today), ("dark", .darkAqua, .today), ("month-light", .aqua, .month),
+        ]
+        for (suffix, name, period) in variants {
+            model.period = period
+            let host = NSHostingView(rootView:
+                PopoverView()
                     .environment(model)
-                    .environment(\.colorScheme, name == .darkAqua ? .dark : .light)
-                let renderer = ImageRenderer(content: view)
-                renderer.scale = 2
-                guard let image = renderer.nsImage,
-                      let tiff = image.tiffRepresentation,
-                      let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
-                else { return }
+                    .background(Color(nsColor: .windowBackgroundColor))
+            )
+            host.frame = NSRect(origin: .zero, size: size)
+            let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.appearance = NSAppearance(named: name)
+            window.contentView = host
+            window.setFrameOrigin(NSPoint(x: -10_000, y: -10_000))
+            window.orderFrontRegardless()
+            host.layoutSubtreeIfNeeded()
+            try? await Task.sleep(for: .milliseconds(600))  // let charts and transitions settle
+            guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { continue }
+            host.cacheDisplay(in: host.bounds, to: rep)
+            if let png = rep.representation(using: .png, properties: [:]) {
                 try? png.write(to: URL(fileURLWithPath: "\(base)-\(suffix).png"))
             }
+            window.orderOut(nil)
         }
     }
 }
