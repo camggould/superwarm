@@ -76,5 +76,5 @@ Maintainers release with `scripts/release.sh X.Y.Z --push` after adding a
 `## [X.Y.Z]` section to `CHANGELOG.md`. The tag triggers
 `.github/workflows/release.yml`, which tests, packages, signs the archive for
 Sparkle and publishes the GitHub release. Never commit signing keys. The Sparkle
-private key lives only in the maintainer's Keychain and the
+private key lives only in the
 `SPARKLE_PRIVATE_KEY` repository secret.
