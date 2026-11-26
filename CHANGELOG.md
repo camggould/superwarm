@@ -6,6 +6,8 @@ All notable changes to Superwarm are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0]
+
 ### Added
 
 - **Linux and the command line.** Superwarm's engine is now a standalone, cross-platform `superwarm` CLI (Rust): `report`, `year`, `sources` and `snapshot`, with `--json` output for scripts. Static binaries for x86_64 and ARM64 Linux ship with each release, and the one-line installer installs the CLI on Linux.
@@ -41,5 +43,6 @@ First public release.
 - `superwarm-cli` for terminal reports.
 - Automatic, signed in-app updates.
 
-[Unreleased]: https://github.com/camggould/superwarm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/camggould/superwarm/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/camggould/superwarm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/camggould/superwarm/releases/tag/v0.1.0
