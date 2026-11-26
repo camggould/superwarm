@@ -80,8 +80,9 @@ final class AppModel {
     private let worker = ScanWorker()
     private var refreshLoop: Task<Void, Never>?
 
-    init() {
+    init(autoRefresh: Bool = true) {
         settings = AppSettings.load()
+        guard autoRefresh else { return }
         refreshLoop = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()

@@ -3,6 +3,24 @@ import SwiftUI
 import SuperwarmCore
 
 @main
+enum Entry {
+    static func main() {
+        let args = CommandLine.arguments
+        if let flag = args.firstIndex(of: "--render-preview"), args.count > flag + 1 {
+            // Developer aid: render the popover to PNGs without the menu bar.
+            let base = args[flag + 1]
+            let app = NSApplication.shared
+            Task { @MainActor in
+                await PreviewRenderer.render(to: base)
+                exit(0)
+            }
+            app.run()
+        } else {
+            SuperwarmApp.main()
+        }
+    }
+}
+
 struct SuperwarmApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
