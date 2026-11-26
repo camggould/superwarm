@@ -55,7 +55,7 @@ struct PopoverView: View {
                 Hero(footprint: summary.footprint)
                 EquivalentsRow(grams: summary.footprint.co2Grams.central, settings: model.settings)
                 TimelineChart()
-                EfficiencyLine(footprint: summary.footprint)
+                ComparisonsList()
                 ModelsList()
             }
             .padding(.top, 6)
@@ -256,29 +256,93 @@ struct TimelineChart: View {
     }
 }
 
-// MARK: - Efficiency
+// MARK: - Comparisons
 
-struct EfficiencyLine: View {
-    let footprint: Footprint
+struct ComparisonsList: View {
+    @Environment(AppModel.self) private var model
+
+    struct Row: Identifiable {
+        let id: String
+        let symbol: String
+        let text: String
+        let delta: Double
+        let help: String
+    }
 
     var body: some View {
-        let baseline = footprint.baselineCO2Grams
-        let saved = footprint.efficiencyDividendGrams
-        let percent = baseline > 0 ? Int((saved / baseline * 100).rounded()) : 0
-        HStack(spacing: 8) {
-            Image(systemName: "leaf.fill").foregroundStyle(Theme.moss)
-            if saved >= 0 {
-                Text("\(percent)% lower than on 2024 models")
-                Spacer()
-                Text("−\(Format.grams(saved))").foregroundStyle(Theme.moss).monospacedDigit()
-            } else {
-                Text("Higher than on 2024 models")
-                Spacer()
-                Text("+\(Format.grams(-saved))").foregroundStyle(Theme.clay).monospacedDigit()
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(rows) { row in
+                HStack(spacing: 8) {
+                    Image(systemName: row.symbol)
+                        .foregroundStyle(row.delta <= 0 ? Theme.moss : Theme.clay)
+                        .frame(width: 18)
+                    Text(row.text)
+                    Spacer()
+                    Text((row.delta <= 0 ? "−" : "+") + Format.grams(abs(row.delta)))
+                        .foregroundStyle(row.delta <= 0 ? Theme.moss : Theme.clay)
+                        .monospacedDigit()
+                }
+                .font(.callout)
+                .help(row.help)
             }
         }
-        .font(.callout)
-        .help("The same tokens on 2024-era models of the same size would have emitted \(Format.grams(baseline)). Assumes energy per token falls ~1.7× per year. See How this is estimated.")
+    }
+
+    private var rows: [Row] {
+        guard let report = model.report else { return [] }
+        let summary = model.summary
+        let current = summary.footprint.co2Grams.central
+        var rows: [Row] = []
+
+        // Newer models vs the same work on 2024-era models.
+        let baseline = summary.footprint.baselineCO2Grams
+        if baseline > 0 {
+            rows.append(Row(
+                id: "generation", symbol: "leaf.fill",
+                text: relative(current, to: baseline, than: "than on 2024 models"),
+                delta: current - baseline,
+                help: "The same tokens on 2024-era models of the same size would have emitted \(Format.grams(baseline)). Assumes energy per token falls ~1.7× per year."
+            ))
+        }
+
+        // This period vs the one before, cut off at the same point. Skipped when
+        // the logs don't reach back over the whole earlier window.
+        let firstRecord = report.entries.lazy.map(\.record.timestamp).min()
+        if let label = model.period.previousLabel,
+           let previousInterval = model.period.previousInterval(),
+           let firstRecord, firstRecord <= previousInterval.start {
+            let previous = report.summary(in: previousInterval).footprint.co2Grams.central
+            if previous > 0 {
+                rows.append(Row(
+                    id: "previous", symbol: current <= previous ? "arrow.down.right" : "arrow.up.right",
+                    text: relative(current, to: previous, than: "than \(label)"),
+                    delta: current - previous,
+                    help: "\(Format.grams(previous)) over the same stretch of \(label)."
+                ))
+            }
+        }
+
+        // Large-model work re-run on mid-size models.
+        let swap = report.whatIf(tier: .large, as: .medium, in: model.interval)
+        if swap.actual > 0 {
+            let saving = swap.actual - swap.alternative
+            rows.append(Row(
+                id: "tier", symbol: "arrow.triangle.swap",
+                text: "\(Int((saving / swap.actual * 100).rounded()))% less with mid-size models",
+                delta: -saving,
+                help: "Your large-model work (\(Format.grams(swap.actual))) on Sonnet-class models would be about \(Format.grams(swap.alternative)), if they could do the same work in the same number of tokens."
+            ))
+        }
+        return rows
+    }
+
+    private func relative(_ value: Double, to reference: Double, than phrase: String) -> String {
+        let change = (value - reference) / reference * 100
+        let percent = Int(abs(change).rounded())
+        let bare = phrase.hasPrefix("than ") ? String(phrase.dropFirst(5)) : phrase
+        if percent == 0 { return "Same as \(bare)" }
+        if change >= 100 { return "\(Format.count(value / reference))× \(bare)" }
+        return "\(percent)% \(change < 0 ? "lower" : "higher") \(phrase)"
     }
 }
 
