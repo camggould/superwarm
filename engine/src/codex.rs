@@ -5,6 +5,12 @@
 //! running total. The first event in a file, and any event where the total
 //! went backwards (a reset), falls back to `last_token_usage`, so a resumed
 //! session does not re-count the history it inherited.
+//!
+//! Records are keyed by the rollout *file* plus the event's ordinal, not by the
+//! session id in `session_meta`: forked and subagent rollouts can carry their
+//! parent's session id, and their ordinals restart, so session-keyed ids
+//! collide across genuinely different responses. A session moved into
+//! `archived_sessions` keeps its file name, so true duplicates still merge.
 
 use crate::lines;
 use crate::usage::{parse_timestamp, Provider, TokenCounts, UsageRecord};
@@ -72,7 +78,8 @@ struct Line {
 }
 
 struct State {
-    session_id: String,
+    /// Identifies the rollout file; the prefix of every record id.
+    file_key: String,
     model: String,
     cwd: Option<String>,
     previous_total: Option<Usage>,
@@ -81,9 +88,9 @@ struct State {
 }
 
 impl State {
-    fn new(fallback_session_id: &str) -> State {
+    fn new(file_key: &str) -> State {
         State {
-            session_id: fallback_session_id.to_string(),
+            file_key: file_key.to_string(),
             model: "unknown-codex-model".to_string(),
             cwd: None,
             previous_total: None,
@@ -99,9 +106,6 @@ impl State {
         let string = |key: &str| payload.get(key).and_then(Value::as_str).map(str::to_string);
         match kind {
             "session_meta" => {
-                if let Some(id) = string("id").or_else(|| string("session_id")) {
-                    self.session_id = id;
-                }
                 self.cwd = string("cwd").or(self.cwd.take());
             }
             "turn_context" => {
@@ -136,7 +140,7 @@ impl State {
                 }
                 let ordinal = parsed.ordinal.map_or_else(|| format!("l{}", self.line_number), |o| o.to_string());
                 self.records.push(UsageRecord {
-                    id: format!("cx:{}:{}", self.session_id, ordinal),
+                    id: format!("cx:{}:{}", self.file_key, ordinal),
                     timestamp_ms,
                     provider: Provider::Codex,
                     model: self.model.clone(),
@@ -151,14 +155,14 @@ impl State {
 
 pub fn parse_file(path: &Path) -> Result<Vec<UsageRecord>> {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let fallback = name.trim_end_matches(".zst").trim_end_matches(".jsonl").to_string();
-    let mut state = State::new(&fallback);
+    let file_key = name.trim_end_matches(".zst").trim_end_matches(".jsonl").to_string();
+    let mut state = State::new(&file_key);
     lines::for_each_line(path, NEEDLES, |line| state.consume(line))?;
     Ok(state.records)
 }
 
-pub fn parse_bytes(data: &[u8], session_id: &str) -> Vec<UsageRecord> {
-    let mut state = State::new(session_id);
+pub fn parse_bytes(data: &[u8], file_key: &str) -> Vec<UsageRecord> {
+    let mut state = State::new(file_key);
     lines::for_each_line_in(data, NEEDLES, |line| state.consume(line));
     state.records
 }
@@ -186,12 +190,32 @@ mod tests {
             token_count(3, (3000, 2500, 80), (2000, 1700, 30)),
         ]
         .join("\n");
-        let records = parse_bytes(text.as_bytes(), "test");
+        let records = parse_bytes(text.as_bytes(), "rollout-a");
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].tokens, TokenCounts { input: 200, cache_write: 0, cache_read: 800, output: 50 });
         assert_eq!(records[1].tokens, TokenCounts { input: 300, cache_write: 0, cache_read: 1700, output: 30 });
         assert!(records.iter().all(|r| r.model == "gpt-5.1-codex" && r.project.as_deref() == Some("/work/app")));
-        assert_eq!(records[1].id, "cx:sess-1:3");
+        assert_eq!(records[1].id, "cx:rollout-a:3");
+    }
+
+    #[test]
+    fn forked_rollouts_sharing_a_session_id_stay_distinct() {
+        // Two rollout files whose session_meta carries the same parent session
+        // id, with ordinals that overlap: these are different responses.
+        let dir = tempfile::tempdir().unwrap();
+        let parent = r#"{"timestamp":"2026-10-25T18:22:22Z","type":"session_meta","payload":{"id":"parent","session_id":"parent"}}"#;
+        for name in ["rollout-1-aaa.jsonl", "rollout-2-bbb.jsonl"] {
+            std::fs::write(dir.path().join(name), [parent.to_string(), token_count(7, (100, 0, 10), (100, 0, 10))].join("\n")).unwrap();
+        }
+        let a = parse_file(&dir.path().join("rollout-1-aaa.jsonl")).unwrap();
+        let b = parse_file(&dir.path().join("rollout-2-bbb.jsonl")).unwrap();
+        assert_ne!(a[0].id, b[0].id);
+
+        // The same file moved into archived_sessions keeps its id, so it merges.
+        let archived = dir.path().join("archived");
+        std::fs::create_dir(&archived).unwrap();
+        std::fs::copy(dir.path().join("rollout-1-aaa.jsonl"), archived.join("rollout-1-aaa.jsonl")).unwrap();
+        assert_eq!(parse_file(&archived.join("rollout-1-aaa.jsonl")).unwrap()[0].id, a[0].id);
     }
 
     #[test]

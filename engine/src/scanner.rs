@@ -52,7 +52,10 @@ pub struct ScanCache {
 }
 
 impl ScanCache {
-    pub const VERSION: u32 = 1;
+    /// Bump whenever parsers change what they emit (ids, fields, merging), so
+    /// stale cached records are re-parsed instead of silently reused.
+    /// 2: Codex record ids are keyed by rollout file rather than session id.
+    pub const VERSION: u32 = 2;
 
     /// `~/Library/Caches/superwarm` on macOS, `~/.cache/superwarm` on Linux.
     pub fn default_path() -> Option<PathBuf> {
@@ -184,8 +187,15 @@ impl Scanner {
 
 /// The same response can be logged in several files (a resumed Claude Code
 /// session copies its history). Keeps one record per id, sorted by time.
+///
+/// Input order doesn't matter: records are pre-sorted so the kept model and
+/// project always come from the earliest copy, whatever order files were read in.
 pub fn deduplicate(records: impl IntoIterator<Item = UsageRecord>) -> Vec<UsageRecord> {
-    let mut by_id: HashMap<String, UsageRecord> = HashMap::new();
+    let mut records: Vec<UsageRecord> = records.into_iter().collect();
+    records.sort_by(|a, b| {
+        (a.timestamp_ms, &a.model, &a.project).partial_cmp(&(b.timestamp_ms, &b.model, &b.project)).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut by_id: HashMap<String, UsageRecord> = HashMap::with_capacity(records.len());
     for record in records {
         match by_id.get_mut(&record.id) {
             Some(existing) => {
