@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds a versioned Superwarm.app, with Sparkle embedded, into dist/.
+# Builds a versioned Superwarm.app into dist/, with Sparkle embedded and the
+# Rust engine (engine/) bundled at Contents/Helpers/superwarm.
 #
 # Environment:
 #   VERSION       marketing version, e.g. 1.2.0 (default: latest v* tag, else 0.0.0)
@@ -30,15 +31,37 @@ if [[ "${UNIVERSAL:-0}" == 1 ]]; then
 fi
 
 swift build -c release --product Superwarm ${arch_flags[@]+"${arch_flags[@]}"} >&2
+
+# The engine: one binary per architecture, merged with lipo for universal builds.
+ENGINE_OUT="$(mktemp -d)/superwarm"
+if [[ "${UNIVERSAL:-0}" == 1 ]]; then
+  # Cross-compiling needs rustup-managed targets. A Homebrew cargo/rustc on the
+  # PATH can't use them (even under `rustup run`), so call rustup's binaries directly.
+  rust_cargo="$(rustup which --toolchain stable cargo)"
+  rust_rustc="$(rustup which --toolchain stable rustc)"
+  engine_bins=()
+  for target in aarch64-apple-darwin x86_64-apple-darwin; do
+    rustup target list --installed --toolchain stable | grep -qx "$target" || rustup target add --toolchain stable "$target" >&2
+    RUSTC="$rust_rustc" "$rust_cargo" build --release --manifest-path engine/Cargo.toml --target "$target" >&2
+    engine_bins+=("engine/target/$target/release/superwarm")
+  done
+  lipo -create "${engine_bins[@]}" -output "$ENGINE_OUT"
+else
+  cargo build --release --manifest-path engine/Cargo.toml >&2
+  cp engine/target/release/superwarm "$ENGINE_OUT"
+fi
 BIN_DIR="$(swift build -c release --show-bin-path ${arch_flags[@]+"${arch_flags[@]}"})"
 
 DIST="dist"
 APP="$DIST/Superwarm.app"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks" "$APP/Contents/Helpers"
 cp "$BIN_DIR/Superwarm" "$APP/Contents/MacOS/Superwarm"
 cp -R "$BIN_DIR/Superwarm_Superwarm.bundle" "$APP/Contents/Resources/"
 ditto "$BIN_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+# Contents/Helpers, not Contents/MacOS: APFS is case-insensitive by default, so
+# "superwarm" would collide with the app's "Superwarm" executable.
+cp "$ENGINE_OUT" "$APP/Contents/Helpers/superwarm"
 
 ICONSET="$(mktemp -d)/Superwarm.iconset"
 swift scripts/make-icon.swift assets/logo-2000.png "$ICONSET" >&2
@@ -85,6 +108,7 @@ codesign "${sign_flags[@]}" --preserve-metadata=entitlements "$SPARKLE/Versions/
 codesign "${sign_flags[@]}" "$SPARKLE/Versions/B/Autoupdate" >&2
 codesign "${sign_flags[@]}" "$SPARKLE/Versions/B/Updater.app" >&2
 codesign "${sign_flags[@]}" "$SPARKLE" >&2
+codesign "${sign_flags[@]}" "$APP/Contents/Helpers/superwarm" >&2
 codesign "${sign_flags[@]}" "$APP" >&2
 codesign --verify --deep --strict "$APP" >&2
 echo "Built Superwarm ${VERSION} (${BUILD_NUMBER}) at $APP" >&2
