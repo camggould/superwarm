@@ -10,12 +10,13 @@ enum Entry {
             // Developer aid: render the popover or the year-in-review slides to PNGs.
             let base = args[flag + 1]
             let review = args[flag] == "--render-review"
+            let demo = args.contains("--demo")
             let app = NSApplication.shared
             Task { @MainActor in
                 if review {
-                    await PreviewRenderer.renderReview(to: base)
+                    await PreviewRenderer.renderReview(to: base, demo: demo)
                 } else {
-                    await PreviewRenderer.render(to: base)
+                    await PreviewRenderer.render(to: base, demo: demo)
                 }
                 exit(0)
             }

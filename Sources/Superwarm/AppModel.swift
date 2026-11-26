@@ -103,6 +103,15 @@ final class AppModel {
         await rebuildReport()
     }
 
+    /// Replaces scanned logs with fixed records (demo screenshots).
+    func use(records: [UsageRecord]) async {
+        self.records = records
+        issues = []
+        filesFound = 0
+        lastScan = Date()
+        await rebuildReport()
+    }
+
     func rebuildReport() async {
         let records = self.records
         let model = EmissionsModel(grid: settings.grid)

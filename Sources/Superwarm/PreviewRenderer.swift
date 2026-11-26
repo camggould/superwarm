@@ -3,19 +3,29 @@ import SwiftUI
 import SuperwarmCore
 
 /// Renders the popover offscreen in light and dark mode, using real logs.
-/// `Superwarm --render-preview /tmp/superwarm` writes `-light.png`, `-dark.png` and `-month-light.png`.
+/// `Superwarm --render-preview /tmp/superwarm` writes today and 30-day views in light and dark.
 ///
 /// The view is hosted in an offscreen window and snapshotted with
 /// `cacheDisplay`, so native AppKit controls (segmented picker, scroll view)
 /// render properly, which SwiftUI's ImageRenderer can't do.
 @MainActor
 enum PreviewRenderer {
-    static func render(to base: String) async {
+    /// Real logs, or the synthetic demo year with `--demo`.
+    static func loadedModel(demo: Bool) async -> AppModel {
         let model = AppModel(autoRefresh: false)
-        await model.refresh()
+        if demo {
+            await model.use(records: DemoData.records())
+        } else {
+            await model.refresh()
+        }
+        return model
+    }
+
+    static func render(to base: String, demo: Bool = false) async {
+        let model = await loadedModel(demo: demo)
         let size = PopoverView.size
         let variants: [(String, NSAppearance.Name, Period)] = [
-            ("light", .aqua, .today), ("dark", .darkAqua, .today), ("month-light", .aqua, .month),
+            ("light", .aqua, .today), ("dark", .darkAqua, .today), ("month-light", .aqua, .month), ("month-dark", .darkAqua, .month),
         ]
         for (suffix, name, period) in variants {
             model.period = period
@@ -42,9 +52,8 @@ enum PreviewRenderer {
     }
 
     /// `Superwarm --render-review /tmp/review` writes one PNG per slide.
-    static func renderReview(to base: String) async {
-        let model = AppModel(autoRefresh: false)
-        await model.refresh()
+    static func renderReview(to base: String, demo: Bool = false) async {
+        let model = await loadedModel(demo: demo)
         guard let report = model.report else { return }
         let year = YearInReview.seasonalYear() ?? Calendar.current.component(.year, from: Date())
         let review = YearInReview(report: report, year: year)
