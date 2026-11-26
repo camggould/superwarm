@@ -278,6 +278,9 @@ struct ComparisonsList: View {
         let text: String
         let delta: Double
         let help: String
+        /// A what-if suggestion rather than something that happened: neutral
+        /// styling and no signed delta.
+        var isTip = false
     }
 
     var body: some View {
@@ -285,13 +288,20 @@ struct ComparisonsList: View {
             ForEach(rows) { row in
                 HStack(spacing: 8) {
                     Image(systemName: row.symbol)
-                        .foregroundStyle(row.delta <= 0 ? Theme.moss : Theme.clay)
+                        .foregroundStyle(row.isTip ? AnyShapeStyle(.secondary) : AnyShapeStyle(row.delta <= 0 ? Theme.moss : Theme.clay))
                         .frame(width: 18)
                     Text(row.text)
+                        .lineLimit(1)
                     Spacer()
-                    Text((row.delta <= 0 ? "−" : "+") + Format.grams(abs(row.delta)))
-                        .foregroundStyle(row.delta <= 0 ? Theme.moss : Theme.clay)
-                        .monospacedDigit()
+                    if row.isTip {
+                        Text("could save \(Format.grams(abs(row.delta)))")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    } else {
+                        Text((row.delta <= 0 ? "−" : "+") + Format.grams(abs(row.delta)))
+                            .foregroundStyle(row.delta <= 0 ? Theme.moss : Theme.clay)
+                            .monospacedDigit()
+                    }
                 }
                 .font(.callout)
                 .help(row.help)
@@ -333,15 +343,18 @@ struct ComparisonsList: View {
             }
         }
 
-        // Large-model work re-run on mid-size models.
+        // Tip: the large-model work on mid-size models. A what-if, not an achievement.
         let swap = report.whatIf(tier: .large, as: .medium, in: model.interval)
         if swap.actual > 0 {
             let saving = swap.actual - swap.alternative
+            let largeModels = report.byModel(in: model.interval).filter { $0.profile.tier == .large }
+            let allClaude = largeModels.allSatisfy { $0.profile.id.contains("opus") }
             rows.append(Row(
-                id: "tier", symbol: "arrow.triangle.swap",
-                text: "\(Int((saving / swap.actual * 100).rounded()))% less with mid-size models",
+                id: "tier", symbol: "lightbulb",
+                text: allClaude ? "Sonnet-size models instead of Opus" : "Mid-size models instead of flagships",
                 delta: -saving,
-                help: "Your large-model work (\(Format.grams(swap.actual))) on Sonnet-class models would be about \(Format.grams(swap.alternative)), if they could do the same work in the same number of tokens."
+                help: "Your work on large models emitted \(Format.grams(swap.actual)). The same tokens on mid-size models (Sonnet-class) would be about \(Format.grams(swap.alternative)). That assumes the smaller model could do the same work in the same number of tokens, which holds for routine tasks but not always for hard ones.",
+                isTip: true
             ))
         }
         return rows
