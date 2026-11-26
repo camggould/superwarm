@@ -15,20 +15,27 @@ so the most valuable contributions are often **better sources**, not code.
 
 ## Development setup
 
-You need macOS 14+ and Xcode 16 or later. For compressed Codex logs, also
-`brew install zstd`.
+Superwarm has a Rust engine with a CLI (`engine/`, any platform) and a macOS app
+(Swift, macOS 14+ with Xcode 16 or later) that bundles the engine.
 
 ```sh
 git clone https://github.com/camggould/superwarm.git
-cd superwarm
-swift build
-swift test
-scripts/install-app.sh   # builds Superwarm.app, installs to ~/Applications, launches it
+cd superwarm/engine
+cargo test
+cargo run --release -- report month   # your own logs
+cargo run --release -- --demo year    # synthetic data
 ```
 
-The logic lives in `SuperwarmCore` and is unit-tested. The SwiftUI app is in
-`Sources/Superwarm`. `superwarm-cli` (`swift run superwarm-cli month`) is the
-quickest way to see the model against your own logs.
+For the app, build the engine once, then:
+
+```sh
+cd ..                    # repo root
+swift build && swift test
+scripts/install-app.sh   # builds Superwarm.app with the engine, installs to ~/Applications, launches it
+```
+
+All estimation logic lives in the engine and is unit-tested there. The app only
+decodes and draws the engine's `superwarm snapshot` JSON.
 
 ### Checking UI changes
 
@@ -48,26 +55,27 @@ commit those images).
 
 ### Adding a model
 
-Add its public release month to `ModelCatalog.entries`, with a test in
-`ModelCatalogTests` if the name is unusual. Size tiers are inferred from the
+Add its public release month to `ENTRIES` in `engine/src/catalog.rs`, with a
+test if the name is unusual. Size tiers are inferred from the
 name (Opus/flagship, Sonnet, Haiku/mini). Users can also override both in
 `~/Library/Application Support/Superwarm/models.json`.
 
 ### Adding an everyday comparison
 
-Add an `Equivalent` in `Equivalents.swift` with its source in
-`Citations.swift`, a row in the methodology table, and a test that pins its
-size. Electricity-based comparisons should scale with the user's grid setting.
+Add an `Equivalent` in `engine/src/equivalents.rs` with its source in
+`engine/src/citations.rs`, a row in the methodology table, and a test that pins
+its size. Electricity-based comparisons should scale with the user's grid setting.
 
 ### Changing a coefficient
 
-Update `EnergyCoefficients`, the methodology document and its sources together
-in one commit, and explain the evidence in the commit message.
+Update `EnergyCoefficients` in `engine/src/emissions.rs`, the methodology
+document and its sources together in one commit, and explain the evidence in the
+commit message.
 
 ## Commits and pull requests
 
 - Keep each commit to **one logical change** that builds and passes
-  `swift test` on its own. Bug fixes ship with their regression test.
+  `cargo test` and `swift test` on its own. Bug fixes ship with their regression test.
 - Write imperative commit subjects, with a body explaining *why*.
 - Squash "fix typo" / "address review" commits into the commits they belong to
   before merge.
@@ -75,11 +83,13 @@ in one commit, and explain the evidence in the commit message.
 
 ## Releasing (maintainers)
 
-1. Add a `## [X.Y.Z]` section to `CHANGELOG.md` and merge it to `main`.
+1. Add a `## [X.Y.Z]` section to `CHANGELOG.md`, set `version = "X.Y.Z"` in
+   `engine/Cargo.toml`, and merge to `main`.
 2. Run `scripts/release.sh X.Y.Z --push`. It checks the tree, runs the tests,
    tags `vX.Y.Z` and pushes the tag.
-3. The release workflow builds a universal app, signs the archive with the
-   Sparkle EdDSA key, and publishes the zip, `SHA256SUMS` and `appcast.xml`.
+3. The release workflow builds static Linux CLIs (x86_64, ARM), the universal
+   macOS app and CLI, signs the app archive with the Sparkle EdDSA key, and
+   publishes everything with `SHA256SUMS` and `appcast.xml`.
    Installed copies pick it up within a day.
 
 Repository secrets:

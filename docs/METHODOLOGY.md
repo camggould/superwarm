@@ -4,15 +4,16 @@ Superwarm turns the token counts your coding agents already log into energy
 and carbon estimates. Nobody outside the model providers can measure inference
 energy directly, so every figure is an **estimate with a range**. This
 document explains each step, every coefficient, and where it comes from. The
-code lives in [`EmissionsModel.swift`](../Sources/SuperwarmCore/EmissionsModel.swift)
-and the sources in [`Citations.swift`](../Sources/SuperwarmCore/Citations.swift).
+code lives in [`engine/src/emissions.rs`](../engine/src/emissions.rs) and the
+sources in [`engine/src/citations.rs`](../engine/src/citations.rs). The macOS app
+and the `superwarm` CLI run the same engine.
 
 ## 1. Reading usage
 
 | Tool | Logs | What's counted |
 |---|---|---|
 | Claude Code | `~/.claude/projects/**/*.jsonl` | The `usage` block of each API response. One response is logged once per content block, so lines are merged by message id + request id. |
-| Codex | `~/.codex/sessions/**/rollout-*.jsonl[.zst]` | The growth in the running `total_token_usage` between `token_count` events. A resumed session starts from `last_token_usage`, so inherited history isn't counted twice. |
+| Codex | `~/.codex/sessions/**/rollout-*.jsonl[.zst]` | The growth in the running `total_token_usage` between `token_count` events. A resumed session starts from `last_token_usage`, so inherited history isn't counted twice. Records are keyed by rollout file, because forked and subagent rollouts can reuse their parent's session id. |
 
 Tokens are split into four kinds because they cost very different amounts of compute:
 
@@ -21,8 +22,8 @@ Tokens are split into four kinds because they cost very different amounts of com
 - **Cache write**: input processed and stored in the prompt cache.
 - **Cache read**: input whose attention keys and values are already cached.
 
-Nothing is uploaded. The only network request Superwarm makes is the update
-check against GitHub.
+Logs are found in the same places on macOS and Linux. Nothing is uploaded. The
+only network request is the macOS app's update check against GitHub.
 
 ## 2. Energy per token
 

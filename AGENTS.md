@@ -1,43 +1,54 @@
 # AGENTS.md
 
-Guidance for coding agents (and humans) working on Superwarm, a macOS menu
-bar app that estimates the carbon footprint of AI coding-agent usage from local
-logs. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the human-oriented version.
+Guidance for coding agents (and humans) working on Superwarm, which estimates
+the carbon footprint of AI coding-agent usage from local logs. It has two parts:
+a cross-platform **Rust engine and CLI** (`engine/`), and a **macOS menu bar app**
+(Swift) that bundles the engine and renders its output. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) for the human-oriented version.
 
 ## Layout
 
 | Path | What lives there |
 |---|---|
-| `Sources/SuperwarmCore/` | All logic, no UI: log parsers, model catalog, emissions model, equivalents, scanner/cache, reports, year in review. Fully unit-tested. |
-| `Sources/Superwarm/` | The SwiftUI menu bar app: popover, settings, methodology window, Year in Carbon, Sparkle updates, preview renderer, demo data. |
-| `Sources/superwarm-cli/` | Terminal report built on SuperwarmCore. |
-| `Tests/SuperwarmCoreTests/` | Swift Testing suites, one file per core component. |
+| `engine/` | The Rust crate: all estimation logic and the `superwarm` CLI. Log parsers, model catalog, emissions model, citations, equivalents, scanner/cache, reports, year in review, demo data and the `snapshot` JSON the app reads. Unit tests sit next to the code. |
+| `Sources/SuperwarmKit/` | Swift: decodes the engine's snapshot JSON, runs the engine binary, formats numbers. |
+| `Sources/Superwarm/` | The SwiftUI menu bar app: popover, settings, methodology window, Year in Carbon, Sparkle updates, preview renderer. No estimation logic. |
+| `Tests/SuperwarmKitTests/` | The app/engine contract: decodes a committed fixture of real engine output. |
 | `scripts/` | Build, install, package, release and installer scripts. |
 | `docs/METHODOLOGY.md` | The emissions model, every coefficient and its sources. |
+
+The app runs the bundled engine (`Superwarm.app/Contents/Helpers/superwarm snapshot`)
+and draws whatever it returns, so the Mac app and the Linux CLI always agree.
 
 ## Commands
 
 ```sh
-swift build                    # debug build
-swift test                     # all tests (must pass before every commit)
-scripts/install-app.sh         # build Superwarm.app and install to ~/Applications
-swift run superwarm-cli month  # terminal report against real logs
+# Engine (run from engine/)
+cargo test                     # must pass before every commit
+cargo fmt && cargo clippy --all-targets -- -D warnings
+cargo run --release -- report month   # terminal report against real logs
+cargo run --release -- --demo year    # synthetic data
+
+# macOS app (run from the repo root; uses engine/target/release/superwarm)
+swift build && swift test
+scripts/install-app.sh         # build Superwarm.app with the engine and install it
 
 # Visual checks without screen recording; writes PNGs:
 .build/debug/Superwarm --render-preview /tmp/sw/pop [--demo]   # popover, light+dark, today+30 days
 .build/debug/Superwarm --render-review  /tmp/sw/rv  [--demo]   # every Year in Carbon slide + share card
 ```
 
-`--demo` uses the deterministic synthetic year in `DemoData.swift`. Always use
-it for anything committed (README images), never real logs.
+`--demo` uses the deterministic synthetic year in `engine/src/demo.rs`. Always
+use it for anything committed (README images), never real logs.
 
 ## Rules
 
 ### Commits
 
 - **Atomic and bisectable.** One logical change per commit. Every commit
-  builds and passes `swift test`. Tests ship in the same commit as the change
-  they cover. Keep refactors, renames and dependency bumps separate from
+  builds and passes `cargo test` and `swift test`. Tests ship in the same commit
+  as the change they cover. Verify in a clean checkout (`git worktree add`), not
+  just your working tree. Keep refactors, renames and dependency bumps separate from
   behaviour changes.
 - **Messages explain why.** Imperative subject; the body gives the reason and
   anything a reviewer can't recover from the diff.
@@ -46,13 +57,23 @@ it for anything committed (README images), never real logs.
 ### The emissions model must stay evidence-backed
 
 - Every coefficient or comparison factor needs a published source, added to
-  `Citations.swift` **and** `docs/METHODOLOGY.md` in the same commit.
+  `engine/src/citations.rs` **and** `docs/METHODOLOGY.md` in the same commit.
 - Ranges are part of the model. A new coefficient needs a central value and a
-  spread (`Coefficient(central, spread:)`), justified in the methodology.
+  spread (`Coefficient::new(central, spread)`), justified in the methodology.
 - Prefer conservative assumptions. Don't overstate the efficiency of newer
   models; the app's credibility depends on it.
 - Physics-derived equivalents (kettle, shower) state their assumptions in the
   `note` and in the methodology table.
+
+### Engine
+
+- Bump `ScanCache::VERSION` whenever a parser changes what it emits (ids,
+  fields, merging), or stale cached records will be reused silently.
+- The snapshot JSON is a contract. Bump `snapshot::SCHEMA_VERSION` and
+  `Snapshot.supportedSchemaVersion` together for breaking changes, and
+  regenerate `Tests/SuperwarmKitTests/Fixtures/demo-snapshot.json`
+  (`superwarm --demo snapshot`).
+- Keep the CLI portable: no macOS-only APIs outside `#[cfg(target_os = "macos")]`.
 
 ### UI
 
@@ -73,8 +94,10 @@ it for anything committed (README images), never real logs.
 ### Releases
 
 Maintainers release with `scripts/release.sh X.Y.Z --push` after adding a
-`## [X.Y.Z]` section to `CHANGELOG.md`. The tag triggers
-`.github/workflows/release.yml`, which tests, packages, signs the archive for
-Sparkle and publishes the GitHub release. Never commit signing keys. The Sparkle
+`## [X.Y.Z]` section to `CHANGELOG.md` and setting `engine/Cargo.toml` to the
+same version. The tag triggers
+`.github/workflows/release.yml`, which tests, builds static Linux CLIs and the
+universal macOS app and CLI, signs the app archive for Sparkle and publishes the
+GitHub release. Never commit signing keys. The Sparkle
 private key lives only in the
 `SPARKLE_PRIVATE_KEY` repository secret.

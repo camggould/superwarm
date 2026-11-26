@@ -4,22 +4,23 @@
 
 # Superwarm
 
-**The carbon footprint of your AI coding agents, in your menu bar.**
+**The carbon footprint of your AI coding agents, in your menu bar or terminal.**
 
-Superwarm reads the token counts Claude Code and Codex already log on your Mac,<br>
+Superwarm reads the token counts Claude Code and Codex already log on your machine,<br>
 turns them into evidence-backed energy and CO₂e estimates, and shows<br>
 how much newer, more efficient models are saving.
 
 [![CI](https://github.com/camggould/superwarm/actions/workflows/ci.yml/badge.svg)](https://github.com/camggould/superwarm/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/camggould/superwarm?sort=semver)](https://github.com/camggould/superwarm/releases/latest)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-2b2620)
+![Linux CLI](https://img.shields.io/badge/Linux-CLI-2b2620)
 [![MIT license](https://img.shields.io/badge/license-MIT-4f6f3a)](LICENSE)
 
 <br>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/popover-dark.png">
-  <img src="docs/images/popover-light.png" width="440" alt="The Superwarm popover: 2.08 kg CO₂e over 30 days, equal to 22% of a commute, with a daily chart and comparisons against 2024-era models">
+  <img src="docs/images/popover-light.png" width="440" alt="The Superwarm popover: 1.16 kg CO₂e over 30 days, equal to 12% of a commute, with a daily chart and comparisons against 2024-era models">
 </picture>
 
 <sub>Screenshots use a synthetic demo year, not real logs.</sub>
@@ -32,9 +33,12 @@ how much newer, more efficient models are saving.
 curl -fsSL https://raw.githubusercontent.com/camggould/superwarm/main/scripts/install.sh | bash
 ```
 
-This downloads the latest release, verifies its SHA-256 checksum, installs it
-to `~/Applications` and launches it. Requires **macOS 14 Sonoma or later**, on
-Apple Silicon or Intel.
+This downloads the latest release and verifies its SHA-256 checksum, then:
+
+- **macOS 14 Sonoma or later** (Apple Silicon or Intel): installs the menu bar
+  app to `~/Applications` and launches it.
+- **Linux** (x86_64 or ARM64, any distribution): installs the `superwarm` CLI
+  to `~/.local/bin`. See [Linux and the command line](#linux-and-the-command-line).
 
 <details>
 <summary><b>Or download it manually</b></summary>
@@ -55,10 +59,11 @@ Apple Silicon or Intel.
 ```sh
 git clone https://github.com/camggould/superwarm.git
 cd superwarm
-scripts/install-app.sh
+cargo install --path engine   # the CLI, on any platform
+scripts/install-app.sh        # the macOS app (needs Xcode 16 or later)
 ```
 
-Needs Xcode 16 or later. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Needs a recent stable Rust. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 </details>
 
@@ -71,12 +76,15 @@ Change this under **Settings → Updates**.
 
 ### Uninstall
 
-Quit Superwarm from its popover, then:
+On macOS, quit Superwarm from its popover, then:
 
 ```sh
 rm -rf ~/Applications/Superwarm.app /Applications/Superwarm.app \
-  ~/Library/Application\ Support/Superwarm
+  ~/Library/Application\ Support/Superwarm ~/Library/Caches/superwarm
 defaults delete com.camggould.superwarm
+
+# Linux
+rm -rf ~/.local/bin/superwarm ~/.cache/superwarm
 ```
 
 ## What it shows
@@ -127,31 +135,61 @@ CO₂e = tokens × energy per token (by model size and generation) × PUE × gri
 - **Electricity** uses the US grid average by default (EPA eGRID). Change it in
   Settings.
 
-Every coefficient, range and source is in [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
-and in the app under **ⓘ → How Superwarm estimates**. Training, hardware
+Every coefficient, range and source is in [docs/METHODOLOGY.md](docs/METHODOLOGY.md),
+in the app under **ⓘ → How Superwarm estimates**, and in `superwarm sources`. Training, hardware
 manufacturing and water aren't included yet.
 
 ## Privacy
 
-Everything stays on your Mac. Superwarm only reads your agents' local logs and
-writes a cache to `~/Library/Application Support/Superwarm`. Its only network
-request is the daily update check against GitHub. The shareable card leaves
+Everything stays on your machine. Superwarm only reads your agents' local logs
+and writes a parse cache (`~/Library/Caches/superwarm` on macOS,
+`~/.cache/superwarm` on Linux). The CLI makes no network requests. The macOS
+app's only request is the daily update check against GitHub. The shareable card leaves
 out project names.
 
-## Command line
+## Linux and the command line
 
-`superwarm-cli` prints the same report in a terminal:
+The engine behind the app is a standalone CLI. It runs anywhere your agents do:
+a Linux workstation, a remote dev box, a cloud VM.
 
-```sh
-swift run -c release superwarm-cli month   # today | week | month | year | all
+```console
+$ superwarm report month
+Superwarm — 30 days
+
+CO2e    1.16 kg  (90% range 280 g – 4.83 kg)
+Energy  3.11 kWh
+Tokens  out 2.3M · in 35.9k · cache write 5.8M · cache read 209.1M
+Efficiency dividend vs 2024-era models: 1.16 kg avoided (baseline 2.32 kg)
+
+That's about:
+  • 0.1 round-trip commutes
+  • 7.7 km flown (short-haul)
+  • 31 kettle boils
+  • 32 hours of video streaming
+…
 ```
+
+<sub>Synthetic demo data (`superwarm --demo report month`).</sub>
+
+| Command | What it shows |
+|---|---|
+| `superwarm report [today\|week\|month\|year\|all]` | Emissions with their likely range, energy, token mix, the efficiency dividend, everyday comparisons and a per-model table. `--json` for scripts. |
+| `superwarm year [YEAR]` | Your year in carbon: equivalents, how bad it could have been, streaks, night-owl share. |
+| `superwarm sources` | Every published source behind the numbers. |
+| `superwarm snapshot` | Everything, as one JSON document (what the macOS app reads). |
+
+Options for any command: `--grid <g/kWh>` (default 373, the US average),
+`--pue`, `--commute <miles>`, `--demo` for synthetic data, `--no-cache`.
+
+On macOS the app bundles the same CLI:
+`ln -sf ~/Applications/Superwarm.app/Contents/Helpers/superwarm ~/.local/bin/superwarm`.
 
 ## Supported tools
 
 | Tool | Logs read |
 |---|---|
 | [Claude Code](https://www.anthropic.com/claude-code) | `~/.claude/projects` (or `$CLAUDE_CONFIG_DIR`) |
-| [Codex](https://github.com/openai/codex) | `~/.codex/sessions` and `archived_sessions` (or `$CODEX_HOME`). Compressed `.jsonl.zst` logs need `zstd` (`brew install zstd`). |
+| [Codex](https://github.com/openai/codex) | `~/.codex/sessions` and `archived_sessions` (or `$CODEX_HOME`). |
 
 Want another tool supported? [Open an issue](https://github.com/camggould/superwarm/issues)
 with an example of its log format.
