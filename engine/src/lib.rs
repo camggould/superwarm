@@ -11,4 +11,5 @@ pub mod emissions;
 pub mod equivalents;
 pub mod format;
 pub mod lines;
+pub mod scanner;
 pub mod usage;

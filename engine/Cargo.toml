@@ -2,7 +2,7 @@
 name = "superwarm"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.82"
 description = "Estimate the carbon footprint of AI coding agents (Claude Code, Codex) from their local logs"
 license = "MIT"
 repository = "https://github.com/camggould/superwarm"
