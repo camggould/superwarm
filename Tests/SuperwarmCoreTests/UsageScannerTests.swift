@@ -59,3 +59,32 @@ import Testing
         #expect(second.records.count == 1)
     }
 }
+
+@Suite struct ComparisonTests {
+    let calendar = Calendar(identifier: .gregorian)
+
+    @Test func previousTodayStopsAtSameTimeYesterday() throws {
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 25, hour: 15))!
+        let previous = try #require(Period.today.previousInterval(now: now, calendar: calendar))
+        #expect(previous.start == calendar.date(from: DateComponents(year: 2026, month: 11, day: 24)))
+        #expect(previous.end == calendar.date(from: DateComponents(year: 2026, month: 11, day: 24, hour: 15)))
+        #expect(Period.allTime.previousInterval(now: now) == nil)
+    }
+
+    @Test func previousWeekIsSevenDaysEarlier() throws {
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 25, hour: 15))!
+        let current = try #require(Period.week.interval(now: now, calendar: calendar))
+        let previous = try #require(Period.week.previousInterval(now: now, calendar: calendar))
+        #expect(calendar.dateComponents([.day], from: previous.start, to: current.start).day == 7)
+    }
+
+    @Test func smallerTierWhatIfIsCheaper() {
+        let record = UsageRecord(id: "a", timestamp: Date(), provider: .claudeCode, model: "claude-opus-4-5",
+                                 project: nil, tokens: TokenCounts(input: 100, cacheRead: 10_000, output: 1_000))
+        let report = UsageReport(records: [record], model: EmissionsModel())
+        let result = report.whatIf(tier: .large, as: .medium, in: nil)
+        #expect(result.actual > 0)
+        #expect(abs(result.alternative / result.actual - 0.45) < 1e-9)
+        #expect(report.whatIf(tier: .small, as: .medium, in: nil).actual == 0)
+    }
+}

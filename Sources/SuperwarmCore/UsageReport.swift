@@ -29,6 +29,34 @@ public enum Period: String, CaseIterable, Sendable, Identifiable {
         }
         return DateInterval(start: start, end: end)
     }
+
+    /// Short name of the preceding period, for comparisons ("than yesterday").
+    public var previousLabel: String? {
+        switch self {
+        case .today: "yesterday"
+        case .week: "last week"
+        case .month: "the 30 days before"
+        case .year: "the year before"
+        case .allTime: nil
+        }
+    }
+
+    /// The preceding period of the same length, cut off at the same point
+    /// (e.g. yesterday up to this time of day), so a part-way-through period
+    /// is compared fairly. `nil` for all time.
+    public func previousInterval(now: Date = Date(), calendar: Calendar = .current) -> DateInterval? {
+        guard let current = interval(now: now, calendar: calendar) else { return nil }
+        let days = switch self {
+        case .today: 1
+        case .week: 7
+        case .month: 30
+        case .year: 365
+        case .allTime: 0
+        }
+        let start = calendar.date(byAdding: .day, value: -days, to: current.start)!
+        let end = calendar.date(byAdding: .day, value: -days, to: min(now, current.end))!
+        return DateInterval(start: start, end: max(start, end))
+    }
 }
 
 public struct Summary: Sendable {
@@ -138,6 +166,20 @@ public struct UsageReport: Sendable {
             buckets[key] = point
         }
         return buckets.values.sorted { ($0.start, $0.provider.rawValue) < ($1.start, $1.provider.rawValue) }
+    }
+
+    /// Central CO2 for the work done on `from`-tier models, and what the same
+    /// tokens would have emitted on `to`-tier models of the same generation.
+    public func whatIf(tier from: ModelTier, as to: ModelTier, in interval: DateInterval?) -> (actual: Double, alternative: Double) {
+        var actual = 0.0
+        var alternative = 0.0
+        for entry in entries(in: interval) where entry.profile.tier == from {
+            var swapped = entry.profile
+            swapped.tier = to
+            actual += entry.footprint.co2Grams.central
+            alternative += model.footprint(tokens: entry.record.tokens, profile: swapped).co2Grams.central
+        }
+        return (actual, alternative)
     }
 
     public func byModel(in interval: DateInterval?) -> [ModelBreakdown] {
