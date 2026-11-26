@@ -37,11 +37,11 @@ main() {
   local base="https://github.com/$repo/releases/download/$tag"
   local zip="Superwarm-$version.zip"
 
-  local tmp
+  # Global, not local: the EXIT trap runs after main() returns.
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  trap 'rm -rf "${tmp:-}"' EXIT
 
-  echo "Downloading Superwarm $version…"
+  echo "Downloading Superwarm ${version}…"
   curl -fL --progress-bar -o "$tmp/$zip" "$base/$zip"
   curl -fsSL -o "$tmp/SHA256SUMS" "$base/SHA256SUMS"
 
