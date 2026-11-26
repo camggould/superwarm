@@ -47,7 +47,9 @@ swift build
 .build/debug/Superwarm --render-review  /tmp/sw/rv  --demo   # Year in Carbon slides
 ```
 
-Please include before/after renders in pull requests that change the UI.
+Please include before/after renders in pull requests that change the UI. For
+CLI output, `scripts/render-terminal.swift` turns real terminal output into the
+README's screenshots (see AGENTS.md).
 `--demo` uses synthetic data; drop it to render from your own logs (but don't
 commit those images).
 

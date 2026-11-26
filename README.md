@@ -143,8 +143,9 @@ manufacturing and water aren't included yet.
 
 Everything stays on your machine. Superwarm only reads your agents' local logs
 and writes a parse cache (`~/Library/Caches/superwarm` on macOS,
-`~/.cache/superwarm` on Linux). The CLI makes no network requests. The macOS
-app's only request is the daily update check against GitHub. The shareable card leaves
+`~/.cache/superwarm` on Linux). The CLI makes no network requests except
+`sync`, which connects only to machines you added, over your own SSH. The macOS
+app also checks GitHub daily for updates. The shareable card leaves
 out project names.
 
 ## Linux and the command line
@@ -152,37 +153,74 @@ out project names.
 The engine behind the app is a standalone CLI. It runs anywhere your agents do:
 a Linux workstation, a remote dev box, a cloud VM.
 
-```console
-$ superwarm report month
-Superwarm — 30 days
-
-CO2e    1.16 kg  (90% range 280 g – 4.83 kg)
-Energy  3.11 kWh
-Tokens  out 2.3M · in 35.9k · cache write 5.8M · cache read 209.1M
-Efficiency dividend vs 2024-era models: 1.16 kg avoided (baseline 2.32 kg)
-
-That's about:
-  • 0.1 round-trip commutes
-  • 7.7 km flown (short-haul)
-  • 31 kettle boils
-  • 32 hours of video streaming
-…
-```
-
-<sub>Synthetic demo data (`superwarm --demo report month`).</sub>
+<p align="center">
+  <img src="docs/images/cli-report.png" width="680" alt="superwarm report week: 463 g CO₂e with its likely range, everyday comparisons, a stacked bar per day for Claude Code and Codex, comparisons against 2024 models and last week, and breakdowns by model, machine and project">
+</p>
 
 | Command | What it shows |
 |---|---|
-| `superwarm report [today\|week\|month\|year\|all]` | Emissions with their likely range, energy, token mix, the efficiency dividend, everyday comparisons and a per-model table. `--json` for scripts. |
-| `superwarm year [YEAR]` | Your year in carbon: equivalents, how bad it could have been, streaks, night-owl share. |
+| `superwarm report [today\|week\|month\|year\|all]` | Emissions with their likely range, everyday comparisons, a chart, comparisons, and breakdowns by model, machine and project. `--json` for scripts. |
+| `superwarm year [YEAR]` | Your year in carbon (below). `--card card.svg` also writes the shareable summary card. |
+| `superwarm export` / `import` | Move usage between machines by hand (see [Remote machines](#remote-machines)). |
+| `superwarm remote add\|list\|remove`, `superwarm sync` | Pull usage from your other machines over SSH. |
 | `superwarm sources` | Every published source behind the numbers. |
 | `superwarm snapshot` | Everything, as one JSON document (what the macOS app reads). |
 
 Options for any command: `--grid <g/kWh>` (default 373, the US average),
-`--pue`, `--commute <miles>`, `--demo` for synthetic data, `--no-cache`.
+`--pue`, `--commute <miles>`, `--local-only`, `--color auto|always|never`
+(colour is off when piped or when `NO_COLOR` is set), `--demo` for synthetic
+data, `--no-cache`.
 
 On macOS the app bundles the same CLI:
 `ln -sf ~/Applications/Superwarm.app/Contents/Helpers/superwarm ~/.local/bin/superwarm`.
+
+### Your year in the terminal
+
+`superwarm year` is the Year in Carbon recap for terminals: equivalents, how
+bad it could have been on 2024's models, and your habits.
+
+<p align="center">
+  <img src="docs/images/cli-year.png" width="680" alt="superwarm year: 11.2 kg CO₂e this year, equal to a day of home electricity and 1,497 phone charges; a bar chart of how bad it could have been on 2024 models and without prompt caching; habits such as 236 active days and a 17-day streak; a month-by-month sparkline">
+</p>
+
+`superwarm year --card card.svg` writes the same shareable card as the Mac app,
+with no screen needed. Open it in a browser, or `rsvg-convert -o card.png card.svg`.
+Project names are never on the card.
+
+<sub>Screenshots use synthetic demo data (`--demo`).</sub>
+
+## Remote machines
+
+Running agents on a remote dev box or cloud VM? Install the CLI there with the
+same one-liner, then pull its usage to your laptop:
+
+<p align="center">
+  <img src="docs/images/cli-remote.png" width="680" alt="superwarm remote add devbox me@devbox.example.com, then superwarm sync pulling 11,252 new responses, then superwarm remote list">
+</p>
+
+- **Over SSH, nothing to run on the remote.** `sync` runs
+  `ssh devbox superwarm export --since …` with your existing keys (or agent).
+  It never prompts, opens no ports and needs no daemon. An unreachable host
+  fails within seconds.
+- **Incremental.** Each sync fetches only what's new since the last one, so
+  syncing every few minutes is cheap.
+- **Usage only.** Remotes send timestamps, model names, token counts and
+  project folder names, never prompts, code or full paths. Add `--no-projects`
+  on the remote to send no folder names at all.
+- **Everywhere.** Reports, `year`, the share card and the Mac app include
+  remote usage, with a **By machine** breakdown. `--local-only` leaves it out.
+- **In the Mac app:** add machines under **Settings → Remote machines**. The
+  app syncs them every 15 minutes, or when you click **Sync Now**.
+
+No SSH access from your laptop? Copy an export instead:
+
+```sh
+devbox$  superwarm export > devbox.jsonl          # or: --since 2026-11-01
+laptop$  superwarm import devbox.jsonl --machine devbox
+```
+
+If `superwarm` isn't in the remote's `~/.local/bin` or on its PATH, point to it:
+`superwarm remote add devbox me@devbox --binary /opt/superwarm/bin/superwarm`.
 
 ## Supported tools
 

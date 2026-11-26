@@ -38,8 +38,20 @@ scripts/install-app.sh         # build Superwarm.app with the engine and install
 .build/debug/Superwarm --render-review  /tmp/sw/rv  [--demo]   # every Year in Carbon slide + share card
 ```
 
-`--demo` uses the deterministic synthetic year in `engine/src/demo.rs`. Always
-use it for anything committed (README images), never real logs.
+`--demo` uses the deterministic synthetic year in `engine/src/demo.rs` (local
+machine "laptop", remote "devbox"). Always use it for anything committed (README
+images, fixtures), never real logs, host names or project names.
+
+README terminal screenshots come from the real CLI output:
+
+```sh
+{ echo '$ superwarm report week'; COLUMNS=74 superwarm --demo report week --color always; } \
+  | swift scripts/render-terminal.swift docs/images/cli-report.png "superwarm report week"
+```
+
+For tests and sandboxes, `SUPERWARM_CONFIG_DIR`, `SUPERWARM_DATA_DIR`,
+`SUPERWARM_CACHE_DIR` and `SUPERWARM_SSH` redirect the engine's files and its
+ssh binary (see `engine/tests/remote_sync.rs`).
 
 ## Rules
 
@@ -74,6 +86,9 @@ use it for anything committed (README images), never real logs.
   regenerate `Tests/SuperwarmKitTests/Fixtures/demo-snapshot.json`
   (`superwarm --demo snapshot`).
 - Keep the CLI portable: no macOS-only APIs outside `#[cfg(target_os = "macos")]`.
+- Remote sync (`engine/src/remote.rs`) only ever moves usage records: never
+  prompts, code or full paths. Bump `EXPORT_VERSION` for incompatible export
+  changes. Sync must stay non-interactive (`BatchMode`) and time-limited.
 
 ### UI
 

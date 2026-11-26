@@ -10,6 +10,9 @@ All notable changes to Superwarm are documented here. The format follows
 
 - **Linux and the command line.** Superwarm's engine is now a standalone, cross-platform `superwarm` CLI (Rust): `report`, `year`, `sources` and `snapshot`, with `--json` output for scripts. Static binaries for x86_64 and ARM64 Linux ship with each release, and the one-line installer installs the CLI on Linux.
 - The macOS app bundles the same CLI at `Superwarm.app/Contents/Helpers/superwarm`.
+- **Remote machines.** `superwarm remote add NAME user@host` and `superwarm sync` pull usage from other machines over SSH (no daemon, no open ports, never prompts). `superwarm export` / `import` move it by hand. Reports gain a By machine breakdown, and the macOS app syncs remotes every 15 minutes, managed under Settings → Remote machines.
+- A neat terminal layout for `superwarm report` and `superwarm year`, with charts, colour (off when piped or with `NO_COLOR`) and natural phrasing.
+- `superwarm year --card card.svg` writes the shareable year card without a screen.
 
 ### Changed
 
