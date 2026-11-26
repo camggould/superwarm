@@ -14,8 +14,7 @@ struct MethodologyView: View {
                     Text("CO₂e = Wh/token × tier × trend × tokens × PUE × grid intensity")
                         .font(.system(.body, design: .monospaced))
                         .padding(8)
-                        .background(Theme.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.hairline))
+                        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
                     Text("Output tokens are the expensive part: each one is a full forward pass. Uncached input (prefill) is processed in parallel and costs a fraction as much per token. Prompt-cache reads skip most of that work. Agentic coding reads millions of cached tokens per session, so this weighting matters.")
                 }
 
@@ -33,7 +32,7 @@ struct MethodologyView: View {
                     }
                     Text("Ranges show an approximate 90% interval. Each assumption's uncertainty is combined in log space, and the range widens the further the efficiency trend is extrapolated.")
                         .font(.caption)
-                        .foregroundStyle(Theme.inkSecondary)
+                        .foregroundStyle(.secondary)
                 }
 
                 section("Why newer models are cheaper per token") {
@@ -50,7 +49,7 @@ struct MethodologyView: View {
                             Link("\(citation.title)", destination: citation.url)
                             Text("\(citation.publisher), \(String(citation.year)). \(citation.usedFor)")
                                 .font(.caption)
-                                .foregroundStyle(Theme.inkSecondary)
+                                .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -60,15 +59,12 @@ struct MethodologyView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
         }
-        .foregroundStyle(Theme.ink)
-        .background(LinearGradient(colors: [Theme.paperTop, Theme.paperBottom], startPoint: .top, endPoint: .bottom))
-        .tint(Theme.lake)
         .frame(width: 600, height: 680)
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 19, weight: .semibold, design: .serif))
+            Text(title).font(.title3.weight(.semibold))
             content()
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -76,9 +72,9 @@ struct MethodologyView: View {
 
     private func row(_ label: String, _ value: String, spread: Double?) -> some View {
         GridRow {
-            Text(label).foregroundStyle(Theme.inkSecondary)
+            Text(label).foregroundStyle(.secondary)
             Text(value).monospacedDigit()
-            Text(spread.map { $0 > 1.0001 ? "×÷ \(fmt($0))" : "" } ?? "").foregroundStyle(Theme.inkTertiary)
+            Text(spread.map { $0 > 1.0001 ? "×÷ \(fmt($0))" : "" } ?? "").foregroundStyle(.tertiary)
         }
     }
 
