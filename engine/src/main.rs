@@ -488,10 +488,12 @@ fn remote_command(command: RemoteCommand, now_ms: i64) -> Result<()> {
             } else {
                 for s in statuses {
                     let via = s.ssh.as_deref().map_or("imported".to_string(), |h| format!("ssh {h}"));
-                    let when =
-                        s.last_sync_ms.map_or("never synced".to_string(), |t| format!("synced {}", ago(t, now_ms)));
-                    let state = s.last_error.map(|e| format!(" · last sync failed: {e}")).unwrap_or_default();
-                    println!("{}  ({via}) · {} responses · {when}{state}", s.name, s.responses);
+                    let when = match (s.last_sync_ms, &s.last_error) {
+                        (None, _) => "never synced".to_string(),
+                        (Some(t), None) => format!("synced {}", ago(t, now_ms)),
+                        (Some(t), Some(e)) => format!("last attempt {} failed: {e}", ago(t, now_ms)),
+                    };
+                    println!("{}  ({via}) · {} responses · {when}", s.name, s.responses);
                 }
             }
         }

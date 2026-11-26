@@ -139,7 +139,7 @@ fn reports_ssh_failures_without_losing_data() {
     assert!(text.contains("flaky: failed") && text.contains("Permission denied"), "{text}");
 
     let list = w.ok(&["remote", "list"]);
-    assert!(list.contains("last sync failed"), "{list}");
+    assert!(list.contains("last attempt just now failed") && !list.contains("synced just now"), "{list}");
     // snapshot --sync still succeeds and carries the error for the app to show.
     let snapshot: serde_json::Value = serde_json::from_str(&w.ok(&["snapshot", "--sync"])).unwrap();
     assert!(snapshot["remotes"][0]["lastError"].as_str().unwrap().contains("Permission denied"));
