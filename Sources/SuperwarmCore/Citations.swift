@@ -165,9 +165,37 @@ public enum Citations {
         usedFor: "Average US home uses ~10,791 kWh of electricity per year (2022), about 29.6 kWh a day."
     )
 
+    public static let waterSense = Citation(
+        id: "epa-watersense",
+        title: "WaterSense Labeled Showerheads",
+        publisher: "US EPA",
+        year: 2024,
+        url: URL(string: "https://www.epa.gov/watersense/showerheads")!,
+        usedFor: "Standard showerhead flow of 2.5 gpm (WaterSense: ≤2.0). A 10-minute shower at 2.0 gpm heated by 25 °C needs ~2.2 kWh of heat, ~2.3 kWh from an electric heater."
+    )
+
+    public static let appleMacBookAir = Citation(
+        id: "apple-mba",
+        title: "MacBook Air 13-inch Technical Specifications",
+        publisher: "Apple",
+        year: 2024,
+        url: URL(string: "https://www.apple.com/macbook-air/specs/")!,
+        usedFor: "52.6 Wh battery. At ~85% charger efficiency a full charge draws ~60 Wh from the wall."
+    )
+
+    public static let doeLED = Citation(
+        id: "doe-led",
+        title: "LED Lighting",
+        publisher: "US Department of Energy",
+        year: 2024,
+        url: URL(string: "https://www.energy.gov/energysaver/led-lighting")!,
+        usedFor: "A ~10 W LED replaces a 60 W incandescent bulb. Left on all year it uses ~88 kWh."
+    )
+
     public static let all: [Citation] = [
         epochChatGPT, jegham, googleGemini, chungJoules, mlEnergy, mistralLCA,
         egrid, ember, googlePUE, epaVehicle, epaEquivalencies, ieaStreaming,
         owidTransport, owidFood, owidPerCapita, nhts, eiaHome,
+        waterSense, appleMacBookAir, doeLED,
     ]
 }

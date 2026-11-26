@@ -36,6 +36,20 @@ import Testing
         #expect(day > 4 && day < 4.2)
     }
 
+    @Test func recapEquivalentsHaveSensibleSizes() throws {
+        let settings = EquivalentSettings()
+        func grams(_ id: String) throws -> Double {
+            try #require(Equivalents.named(id, grid: grid, settings: settings)).gramsPerUnit
+        }
+        // ~600 kg for one passenger NYC → LA.
+        #expect(try abs(grams("flight-nyc-la") - 600_980) < 1)
+        // On the US grid: shower ≈ 0.86 kg, MacBook charge ≈ 22 g, LED year ≈ 32.7 kg.
+        #expect(try abs(grams("shower") - 857.9) < 0.1)
+        #expect(try abs(grams("macbook") - 22.38) < 0.01)
+        #expect(try abs(grams("led-year") - 32_697) < 1)
+        #expect(try grams("train-km") < grams("flight-km"))
+    }
+
     @Test func formatting() {
         #expect(Format.grams(0.5) == "0.5 g")
         #expect(Format.grams(0) == "0 g")

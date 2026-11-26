@@ -80,6 +80,31 @@ public enum Equivalents {
                 note: "Per passenger, including non-CO2 warming effects."
             ),
             Equivalent(
+                id: "flight-nyc-la", symbol: "airplane.departure", singular: "flight from New York to LA", plural: "flights from New York to LA",
+                gramsPerUnit: 3_980 * 151, citation: Citations.owidTransport,
+                note: "One passenger, ~3,980 km at ~151 g CO2e/km including non-CO2 warming."
+            ),
+            Equivalent(
+                id: "train-km", symbol: "tram.fill", singular: "km by train", plural: "km by train",
+                gramsPerUnit: 35, citation: Citations.owidTransport,
+                note: "Per passenger, UK national rail average."
+            ),
+            Equivalent(
+                id: "shower", symbol: "shower.fill", singular: "hot shower", plural: "hot showers",
+                gramsPerUnit: 2_300 * gPerWh, citation: Citations.waterSense,
+                note: "10 minutes at 2.0 gpm, water heated by 25 °C electrically (~2.3 kWh), on your selected grid."
+            ),
+            Equivalent(
+                id: "macbook", symbol: "laptopcomputer", singular: "MacBook charge", plural: "MacBook charges",
+                gramsPerUnit: 60 * gPerWh, citation: Citations.appleMacBookAir,
+                note: "52.6 Wh battery, ~60 Wh from the wall, on your selected grid."
+            ),
+            Equivalent(
+                id: "led-year", symbol: "lightbulb.fill", singular: "year of an LED bulb left on", plural: "years of an LED bulb left on",
+                gramsPerUnit: 10 * 8_766 * gPerWh, citation: Citations.doeLED,
+                note: "A 10 W LED burning day and night for a year (~88 kWh), on your selected grid."
+            ),
+            Equivalent(
                 id: "gasoline", symbol: "fuelpump.fill", singular: "gallon of gasoline", plural: "gallons of gasoline",
                 gramsPerUnit: gramsPerGallonGasoline, citation: Citations.epaVehicle,
                 note: "CO2 from burning one US gallon."
@@ -116,6 +141,11 @@ public enum Equivalents {
         func pick(_ id: String) -> Equivalent { all.first { $0.id == id }! }
         let home = pick("home-day").units(for: grams) >= 1 ? pick("home-day") : pick("home-hour")
         return [pick("commute"), pick("burger"), home]
+    }
+
+    /// Looks up one equivalent by id.
+    public static func named(_ id: String, grid: GridSettings, settings: EquivalentSettings) -> Equivalent? {
+        all(grid: grid, settings: settings).first { $0.id == id }
     }
 
     /// Picks the comparisons that read most naturally for a given amount:
