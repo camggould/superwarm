@@ -4,6 +4,7 @@ import SuperwarmCore
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(Updates.self) private var updates
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -37,6 +38,26 @@ struct SettingsView: View {
             Section("Menu bar") {
                 Picker("Show", selection: $model.settings.menuBarPeriod) {
                     ForEach(AppSettings.MenuBarPeriod.allCases) { Text($0.label).tag($0) }
+                }
+            }
+
+            Section("Updates") {
+                LabeledContent("Version", value: updates.currentVersion)
+                if updates.isEnabled {
+                    Toggle("Check for updates automatically", isOn: Binding(
+                        get: { updates.automaticallyChecks },
+                        set: { updates.automaticallyChecks = $0 }
+                    ))
+                    Toggle("Download and install updates automatically", isOn: Binding(
+                        get: { updates.automaticallyDownloads },
+                        set: { updates.automaticallyDownloads = $0 }
+                    ))
+                    .help("Updates install the next time Superwarm quits.")
+                    Button("Check Now") { updates.checkForUpdates() }
+                } else {
+                    Text("Updates are available in release builds installed from GitHub.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 

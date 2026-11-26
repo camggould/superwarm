@@ -5,6 +5,7 @@ import SuperwarmCore
 
 struct PopoverView: View {
     @Environment(AppModel.self) private var model
+    @Environment(Updates.self) private var updates: Updates?
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
@@ -71,6 +72,17 @@ struct PopoverView: View {
             }
             if model.isScanning {
                 ProgressView().controlSize(.mini)
+            }
+            if let updates, updates.updateAvailable {
+                Button {
+                    updates.checkForUpdates()
+                } label: {
+                    Label(updates.availableVersion.map { "Update to \($0)" } ?? "Update available",
+                          systemImage: "arrow.down.circle.fill")
+                        .labelStyle(.titleAndIcon)
+                        .foregroundStyle(Theme.moss)
+                }
+                .help("A new version of Superwarm is ready to install")
             }
             if let year = YearInReview.seasonalYear(), model.report != nil {
                 Button {

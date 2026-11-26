@@ -29,11 +29,13 @@ enum Entry {
 struct SuperwarmApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
+    @State private var updates = Updates()
 
     var body: some Scene {
         MenuBarExtra {
             PopoverView()
                 .environment(model)
+                .environment(updates)
         } label: {
             MenuBarLabel(model: model)
         }
@@ -42,6 +44,7 @@ struct SuperwarmApp: App {
         Settings {
             SettingsView()
                 .environment(model)
+                .environment(updates)
         }
 
         Window("Year in Carbon", id: "year-in-review") {

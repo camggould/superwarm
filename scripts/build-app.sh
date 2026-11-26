@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Builds a versioned Superwarm.app into dist/.
+# Builds a versioned Superwarm.app, with Sparkle embedded, into dist/.
 #
 # Environment:
 #   VERSION       marketing version, e.g. 1.2.0 (default: latest v* tag, else 0.0.0)
 #   BUILD_NUMBER  monotonically increasing integer (default: commit count)
 #   UNIVERSAL=1   build for arm64 and x86_64 (default: host architecture only)
-#   SIGN_IDENTITY codesigning identity (default: "-" for ad-hoc)
+#   SIGN_IDENTITY codesigning identity (default: "-" for ad-hoc). A Developer ID
+#                 identity also enables the hardened runtime, for notarization.
+#   FEED_URL      Sparkle appcast URL (default: latest GitHub release's appcast.xml)
 #
 # Prints the path of the built app on the last line.
 set -euo pipefail
@@ -16,6 +18,11 @@ VERSION="${VERSION:-${latest_tag#v}}"
 VERSION="${VERSION:-0.0.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+FEED_URL="${FEED_URL:-https://github.com/camggould/superwarm/releases/latest/download/appcast.xml}"
+# EdDSA public key matching the private key that signs release archives.
+# The private key lives in the maintainer's Keychain (account "superwarm") and
+# in the SPARKLE_PRIVATE_KEY repository secret. Never commit the private key.
+SPARKLE_PUBLIC_KEY="arsOfQAY8W/hLuodLQE3pGgWCBPj4gn/pWw3rJM5KV8="
 
 arch_flags=()
 if [[ "${UNIVERSAL:-0}" == 1 ]]; then
@@ -28,9 +35,10 @@ BIN_DIR="$(swift build -c release --show-bin-path ${arch_flags[@]+"${arch_flags[
 DIST="dist"
 APP="$DIST/Superwarm.app"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN_DIR/Superwarm" "$APP/Contents/MacOS/Superwarm"
 cp -R "$BIN_DIR/Superwarm_Superwarm.bundle" "$APP/Contents/Resources/"
+ditto "$BIN_DIR/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 
 ICONSET="$(mktemp -d)/Superwarm.iconset"
 swift scripts/make-icon.swift assets/logo-2000.png "$ICONSET" >&2
@@ -53,10 +61,31 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSHumanReadableCopyright</key><string>MIT License</string>
+  <key>SUFeedURL</key><string>${FEED_URL}</string>
+  <key>SUPublicEDKey</key><string>${SPARKLE_PUBLIC_KEY}</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUScheduledCheckInterval</key><integer>86400</integer>
 </dict>
 </plist>
 PLIST
 
-codesign --force --deep --options runtime --sign "$SIGN_IDENTITY" "$APP" >&2
+# Sign inside-out, as Sparkle documents for hardened-runtime / notarized apps.
+# The hardened runtime (required for notarization) enforces library validation:
+# every loaded library must share the app's Team ID. Ad-hoc signatures have no
+# Team ID, so ad-hoc builds skip the hardened runtime or Sparkle won't load.
+sign_flags=(--force --sign "$SIGN_IDENTITY")
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  sign_flags+=(--timestamp=none)
+else
+  sign_flags+=(--timestamp --options runtime)
+fi
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
+codesign "${sign_flags[@]}" "$SPARKLE/Versions/B/XPCServices/Installer.xpc" >&2
+codesign "${sign_flags[@]}" --preserve-metadata=entitlements "$SPARKLE/Versions/B/XPCServices/Downloader.xpc" >&2
+codesign "${sign_flags[@]}" "$SPARKLE/Versions/B/Autoupdate" >&2
+codesign "${sign_flags[@]}" "$SPARKLE/Versions/B/Updater.app" >&2
+codesign "${sign_flags[@]}" "$SPARKLE" >&2
+codesign "${sign_flags[@]}" "$APP" >&2
+codesign --verify --deep --strict "$APP" >&2
 echo "Built Superwarm ${VERSION} (${BUILD_NUMBER}) at $APP" >&2
 echo "$APP"
