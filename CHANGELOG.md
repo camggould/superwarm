@@ -6,6 +6,22 @@ All notable changes to Superwarm are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Linux and the command line.** Superwarm's engine is now a standalone, cross-platform `superwarm` CLI (Rust): `report`, `year`, `sources` and `snapshot`, with `--json` output for scripts. Static binaries for x86_64 and ARM64 Linux ship with each release, and the one-line installer installs the CLI on Linux.
+- The macOS app bundles the same CLI at `Superwarm.app/Contents/Helpers/superwarm`.
+
+### Changed
+
+- The macOS app now renders everything from the bundled engine instead of its own Swift implementation, so the app and the CLI always agree.
+- Scanning is much faster: a cold scan of ~1,700 logs (5.4 GB) takes about 3 seconds instead of 40.
+- Compressed Codex logs no longer need `zstd` installed.
+- Weekly chart buckets start on Monday everywhere, instead of following the system locale.
+
+### Fixed
+
+- Codex responses from forked and subagent sessions were sometimes merged with unrelated responses and not counted, because those rollouts reuse their parent's session id. Records are now keyed by rollout file. On one heavy user's logs this recovered about 1,000 responses.
+
 ## [0.1.0]
 
 First public release.
