@@ -30,6 +30,8 @@ public struct EquivalentSettings: Codable, Sendable, Hashable {
 
 public enum Equivalents {
     public static let gramsPerCarMile = 400.0
+    /// Average US home electricity use, EIA (2022): 10,791 kWh / year.
+    public static let homeKWhPerDay = 10_791.0 / 365.25
     public static let gramsPerGallonGasoline = 8_887.0
 
     /// Equivalents whose size depends on the grid and commute settings.
@@ -51,6 +53,16 @@ public enum Equivalents {
                 id: "kettle", symbol: "cup.and.saucer.fill", singular: "kettle boil", plural: "kettle boils",
                 gramsPerUnit: 100 * gPerWh, citation: Citations.egrid,
                 note: "1 L heated by 80 °C ≈ 0.1 kWh, on your selected grid."
+            ),
+            Equivalent(
+                id: "home-hour", symbol: "house.fill", singular: "hour of home electricity", plural: "hours of home electricity",
+                gramsPerUnit: homeKWhPerDay / 24 * grid.gramsCO2PerKWh, citation: Citations.eiaHome,
+                note: "Average US home, ~1.2 kWh per hour, on your selected grid."
+            ),
+            Equivalent(
+                id: "home-day", symbol: "house.fill", singular: "day of home electricity", plural: "days of home electricity",
+                gramsPerUnit: homeKWhPerDay * grid.gramsCO2PerKWh, citation: Citations.eiaHome,
+                note: "Average US home, ~29.6 kWh per day, on your selected grid."
             ),
             Equivalent(
                 id: "phone", symbol: "iphone.gen3", singular: "phone charge", plural: "phone charges",
@@ -94,6 +106,16 @@ public enum Equivalents {
                 note: "Google's measured median text prompt, May 2025. A short chat prompt, not an agentic coding turn."
             ),
         ]
+    }
+
+    /// The three headline comparisons, one per domain so they don't repeat each
+    /// other: getting around (your commute), food (a beef burger) and home energy
+    /// (your home's electricity, in hours or days, whichever reads better).
+    public static func headline(for grams: Double, grid: GridSettings, settings: EquivalentSettings) -> [Equivalent] {
+        let all = all(grid: grid, settings: settings)
+        func pick(_ id: String) -> Equivalent { all.first { $0.id == id }! }
+        let home = pick("home-day").units(for: grams) >= 1 ? pick("home-day") : pick("home-hour")
+        return [pick("commute"), pick("burger"), home]
     }
 
     /// Picks the comparisons that read most naturally for a given amount:

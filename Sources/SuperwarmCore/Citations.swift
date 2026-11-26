@@ -156,9 +156,18 @@ public enum Citations {
         usedFor: "Average US commute trip of ~11.7 miles one way. Default commute length."
     )
 
+    public static let eiaHome = Citation(
+        id: "eia-home",
+        title: "How much electricity does an American home use?",
+        publisher: "US EIA",
+        year: 2023,
+        url: URL(string: "https://www.eia.gov/tools/faqs/faq.php?id=97&t=3")!,
+        usedFor: "Average US home uses ~10,791 kWh of electricity per year (2022), about 29.6 kWh a day."
+    )
+
     public static let all: [Citation] = [
         epochChatGPT, jegham, googleGemini, chungJoules, mlEnergy, mistralLCA,
         egrid, ember, googlePUE, epaVehicle, epaEquivalencies, ieaStreaming,
-        owidTransport, owidFood, owidPerCapita, nhts,
+        owidTransport, owidFood, owidPerCapita, nhts, eiaHome,
     ]
 }

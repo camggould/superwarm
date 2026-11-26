@@ -26,6 +26,16 @@ import Testing
         }
     }
 
+    @Test func headlineCoversThreeDomainsAndScalesHomeUnit() {
+        let small = Equivalents.headline(for: 250, grid: grid, settings: .init())
+        #expect(small.map(\.id) == ["commute", "burger", "home-hour"])
+        // ~11 kg is about one day of an average US home's electricity on the US grid.
+        let large = Equivalents.headline(for: 45_000, grid: grid, settings: .init())
+        #expect(large.map(\.id) == ["commute", "burger", "home-day"])
+        let day = large[2].units(for: 45_000)
+        #expect(day > 4 && day < 4.2)
+    }
+
     @Test func formatting() {
         #expect(Format.grams(0.5) == "0.5 g")
         #expect(Format.grams(0) == "0 g")
