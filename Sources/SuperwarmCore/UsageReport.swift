@@ -35,6 +35,8 @@ public struct Summary: Sendable {
     public var tokens: TokenCounts = .zero
     public var footprint: Footprint = .zero
     public var responses = 0
+
+    public init() {}
 }
 
 public struct TimelinePoint: Sendable, Identifiable, Hashable {
