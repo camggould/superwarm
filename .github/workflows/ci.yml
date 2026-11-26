@@ -6,7 +6,45 @@ on:
   pull_request:
 
 jobs:
-  test:
+  engine:
+    name: Engine (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Lint
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Smoke-test the CLI
+        run: |
+          cargo build --release
+          ./target/release/superwarm --demo report month
+          ./target/release/superwarm --demo snapshot > /dev/null
+
+  app:
+    name: macOS app
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
