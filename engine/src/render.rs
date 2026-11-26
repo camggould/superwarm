@@ -99,6 +99,12 @@ pub fn sparkline(values: &[f64]) -> String {
         .collect()
 }
 
+/// Whole-number counts: "1 response", "616 responses", "17.0k responses".
+fn responses(n: u64) -> String {
+    let count = if n < 10_000 { nice(n as f64).trim_end_matches(".0").to_string() } else { format::count(n as f64) };
+    format!("{count} response{}", if n == 1 { "" } else { "s" })
+}
+
 /// Counts for prose: "4.1", "37", "1,497", "12.3k".
 fn nice(n: f64) -> String {
     if (1_000.0..10_000.0).contains(&n.abs()) {
@@ -205,11 +211,11 @@ pub fn report<Tz: TimeZone>(ui: &Ui, v: &ReportView<Tz>) -> String {
         out,
         "   {}",
         ui.dim(&format!(
-            "{} output · {} input · {} cached tokens · {} responses",
+            "{} output · {} input · {} cached tokens · {}",
             format::tokens(t.output),
             format::tokens(t.input + t.cache_write),
             format::tokens(t.cache_read),
-            format::count(p.summary.responses as f64)
+            responses(p.summary.responses)
         ))
     );
 
@@ -454,11 +460,11 @@ pub fn year<Tz: TimeZone>(ui: &Ui, v: &YearView<Tz>) -> String {
         out,
         "   {}",
         ui.dim(&format!(
-            "likely {} – {} · {} · {} responses",
+            "likely {} – {} · {} · {}",
             format::grams(fp.co2_grams.low),
             format::grams(fp.co2_grams.high),
             format::energy(fp.energy_wh.central),
-            format::count(r.summary.responses as f64)
+            responses(r.summary.responses)
         ))
     );
 
@@ -589,6 +595,14 @@ mod tests {
             })
             .collect();
         UsageReport::new(records, EmissionsModel::default(), vec![])
+    }
+
+    #[test]
+    fn response_counts_are_whole_numbers() {
+        assert_eq!(responses(1), "1 response");
+        assert_eq!(responses(616), "616 responses");
+        assert_eq!(responses(1_497), "1,497 responses");
+        assert_eq!(responses(17_002), "17.0k responses");
     }
 
     #[test]
