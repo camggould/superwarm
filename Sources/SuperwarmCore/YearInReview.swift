@@ -28,6 +28,8 @@ public struct YearInReview: Sendable {
     public let monthly: [Double]
     public let topModel: Share?
     public let topProject: Share?
+    /// The same year without newer models, and also without prompt caching.
+    public let counterfactual: UsageReport.Counterfactual
 
     public var totalGrams: Double { summary.footprint.co2Grams.central }
     public var dividendGrams: Double { summary.footprint.efficiencyDividendGrams }
@@ -80,6 +82,7 @@ public struct YearInReview: Sendable {
         }
 
         self.summary = summary
+        self.counterfactual = report.counterfactual(in: interval)
         self.hourly = hourly
         self.monthly = monthly
         self.projectCount = byProject.count

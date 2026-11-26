@@ -78,6 +78,18 @@ import Testing
         #expect(calendar.dateComponents([.day], from: previous.start, to: current.start).day == 7)
     }
 
+    @Test func counterfactualStepsGetWorse() {
+        let newer = Date(timeIntervalSince1970: 1_790_000_000)  // ~2026, well after the 2024 reference
+        let record = UsageRecord(id: "a", timestamp: newer, provider: .claudeCode, model: "some-new-large-model-pro",
+                                 project: nil, tokens: TokenCounts(input: 0, cacheRead: 100_000, output: 0))
+        let report = UsageReport(records: [record], model: EmissionsModel())
+        let c = report.counterfactual(in: nil)
+        #expect(c.actual > 0)
+        #expect(c.onReferenceModels > c.actual)
+        // Cache reads cost 0.1x an uncached input token, so turning caching off is 10x.
+        #expect(abs(c.withoutCaching / c.onReferenceModels - 10) < 1e-9)
+    }
+
     @Test func smallerTierWhatIfIsCheaper() {
         let record = UsageRecord(id: "a", timestamp: Date(), provider: .claudeCode, model: "claude-opus-4-5",
                                  project: nil, tokens: TokenCounts(input: 100, cacheRead: 10_000, output: 1_000))

@@ -182,6 +182,31 @@ public struct UsageReport: Sendable {
         return (actual, alternative)
     }
 
+    /// "How bad it could have been": the same work, step by step, without the
+    /// optimizations that already exist.
+    public struct Counterfactual: Sendable, Hashable {
+        /// What was actually emitted (central grams).
+        public var actual: Double
+        /// The same tokens on 2024-era models of the same size.
+        public var onReferenceModels: Double
+        /// As above, and with every cache read and write processed as uncached input.
+        public var withoutCaching: Double
+    }
+
+    public func counterfactual(in interval: DateInterval?) -> Counterfactual {
+        var result = Counterfactual(actual: 0, onReferenceModels: 0, withoutCaching: 0)
+        for entry in entries(in: interval) {
+            var reference = entry.profile
+            reference.generation = model.coefficients.referenceGeneration
+            let tokens = entry.record.tokens
+            let uncached = TokenCounts(input: tokens.input + tokens.cacheRead + tokens.cacheWrite, output: tokens.output)
+            result.actual += entry.footprint.co2Grams.central
+            result.onReferenceModels += entry.footprint.baselineCO2Grams
+            result.withoutCaching += model.footprint(tokens: uncached, profile: reference).co2Grams.central
+        }
+        return result
+    }
+
     public func byModel(in interval: DateInterval?) -> [ModelBreakdown] {
         var buckets: [String: ModelBreakdown] = [:]
         for entry in entries(in: interval) {
