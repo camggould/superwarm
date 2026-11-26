@@ -127,7 +127,7 @@ public struct UsageReport: Sendable {
         self.catalog = catalog
     }
 
-    func entries(in interval: DateInterval?) -> some Sequence<Entry> {
+    public func entries(in interval: DateInterval?) -> some Sequence<Entry> {
         entries.lazy.filter { entry in
             guard let interval else { return true }
             return entry.record.timestamp >= interval.start && entry.record.timestamp < interval.end
