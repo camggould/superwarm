@@ -1,18 +1,19 @@
 //! `superwarm`: the carbon footprint of your AI coding agents, in a terminal.
 
 use anyhow::Result;
-use chrono::{Local, TimeZone};
+use chrono::Local;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use std::time::Instant;
-use superwarm::catalog::{GenerationSource, ModelOverride};
+use superwarm::catalog::ModelOverride;
 use superwarm::emissions::{EmissionsModel, GridSettings, GRID_US_AVERAGE};
-use superwarm::equivalents::{self, EquivalentSettings};
+use superwarm::equivalents::EquivalentSettings;
+use superwarm::render::{self, ReportView, Ui, YearView};
 use superwarm::report::{local_naive, Period, UsageReport};
 use superwarm::review::{seasonal_year, YearInReview};
 use superwarm::scanner::{ScanCache, ScanResult, Scanner};
 use superwarm::snapshot::{self, ScanInfo};
-use superwarm::{citations, demo, format};
+use superwarm::{citations, demo};
 
 #[derive(Parser)]
 #[command(
@@ -73,6 +74,42 @@ struct Options {
     /// Use a synthetic demo year instead of your logs
     #[arg(long, global = true)]
     demo: bool,
+    /// Colour output: auto (terminals only, honours NO_COLOR), always or never
+    #[arg(long, global = true, value_enum, default_value = "auto")]
+    color: ColorChoice,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ColorChoice {
+    Auto,
+    Always,
+    Never,
+}
+
+fn ui(choice: ColorChoice) -> Ui {
+    use std::io::IsTerminal;
+    let tty = std::io::stdout().is_terminal();
+    let color = match choice {
+        ColorChoice::Always => true,
+        ColorChoice::Never => false,
+        ColorChoice::Auto => tty && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty()),
+    };
+    Ui { color, width: terminal_width().unwrap_or(80) }
+}
+
+fn terminal_width() -> Option<usize> {
+    if let Some(columns) = std::env::var("COLUMNS").ok().and_then(|c| c.parse().ok()) {
+        return Some(columns);
+    }
+    #[cfg(unix)]
+    {
+        // SAFETY: TIOCGWINSZ only writes into the winsize struct we pass.
+        let mut size: libc::winsize = unsafe { std::mem::zeroed() };
+        if unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut size) } == 0 && size.ws_col > 0 {
+            return Some(size.ws_col as usize);
+        }
+    }
+    None
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -164,7 +201,25 @@ fn main() -> Result<()> {
                 let section = snapshot.periods.into_iter().find(|p| p.period == period.id());
                 println!("{}", serde_json::to_string_pretty(&section)?);
             } else {
-                print_report(&loaded, period, &settings, now_ms);
+                let section = snapshot::period_snapshot(
+                    &loaded.report,
+                    period,
+                    loaded.report.first_record_ms(),
+                    &settings,
+                    now_ms,
+                    &Local,
+                );
+                let view = ReportView {
+                    report: &loaded.report,
+                    projects: loaded.report.by_project(section.range),
+                    period: &section,
+                    settings: &settings,
+                    first_record_ms: loaded.report.first_record_ms(),
+                    now_ms,
+                    tz: &Local,
+                    footer: footer(&loaded),
+                };
+                print!("{}", render::report(&ui(options.color), &view));
             }
         }
         Command::Year { year, json } => {
@@ -176,7 +231,8 @@ fn main() -> Result<()> {
             if json {
                 println!("{}", serde_json::to_string_pretty(&review)?);
             } else {
-                print_year(&review, &loaded.report, &settings);
+                let view = YearView { review: &review, report: &loaded.report, settings: &settings, tz: &Local };
+                print!("{}", render::year(&ui(options.color), &view));
             }
         }
         Command::Snapshot { year } => {
@@ -197,135 +253,29 @@ fn scan_info(scan: &ScanResult) -> ScanInfo {
     }
 }
 
-fn pad(text: &str, width: usize) -> String {
-    format!("{text:<width$}")
+fn footer(loaded: &Loaded) -> String {
+    let source = if loaded.scan.files_found == 0 && !loaded.scan.records.is_empty() {
+        "synthetic demo data".to_string()
+    } else {
+        format!(
+            "{} logs scanned in {:.1}s ({} re-parsed)",
+            format_thousands(loaded.scan.files_found),
+            loaded.seconds,
+            loaded.scan.files_parsed
+        )
+    };
+    let issues = loaded.scan.issues.first().map(|i| format!(" · ! {i}")).unwrap_or_default();
+    format!("Estimates with a ~90% range · {source} · sources: superwarm sources{issues}")
 }
 
-fn print_report(loaded: &Loaded, period: Period, settings: &EquivalentSettings, now_ms: i64) {
-    let report = &loaded.report;
-    let range = period.interval(now_ms, &Local);
-    let summary = report.summary(range);
-    let fp = summary.footprint;
-    let t = summary.tokens;
-
-    println!("Superwarm — {}", period.label());
-    println!(
-        "Scanned {} files ({} re-parsed) in {:.1}s, {} responses total",
-        loaded.scan.files_found,
-        loaded.scan.files_parsed,
-        loaded.seconds,
-        loaded.scan.records.len()
-    );
-    for issue in loaded.scan.issues.iter().take(5) {
-        println!("  ! {issue}");
+fn format_thousands(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
     }
-    println!();
-    println!(
-        "CO2e    {}  (90% range {} – {})",
-        format::grams(fp.co2_grams.central),
-        format::grams(fp.co2_grams.low),
-        format::grams(fp.co2_grams.high)
-    );
-    println!("Energy  {}", format::energy(fp.energy_wh.central));
-    println!(
-        "Tokens  out {} · in {} · cache write {} · cache read {}",
-        format::tokens(t.output),
-        format::tokens(t.input),
-        format::tokens(t.cache_write),
-        format::tokens(t.cache_read)
-    );
-    println!(
-        "Efficiency dividend vs 2024-era models: {} avoided (baseline {})",
-        format::grams(fp.efficiency_dividend_grams()),
-        format::grams(fp.baseline_co2_grams)
-    );
-    println!();
-    println!("That's about:");
-    for e in equivalents::highlights(fp.co2_grams.central, &report.model.grid, settings, 6) {
-        println!("  • {}", e.phrase(fp.co2_grams.central));
-    }
-    println!();
-    println!("{}{}{}{}g/1k out", pad("Model", 34), pad("Tier", 9), pad("Gen", 12), pad("CO2e", 11));
-    for m in report.by_model(range).iter().take(12) {
-        let generation = Local
-            .timestamp_millis_opt(m.profile.generation_ms)
-            .single()
-            .map_or_else(String::new, |d| d.format("%Y-%m").to_string());
-        let marker = match m.profile.generation_source {
-            GenerationSource::FirstSeen => "*",
-            GenerationSource::Override => "†",
-            GenerationSource::Catalog => "",
-        };
-        println!(
-            "{}{}{}{}{:.3}",
-            pad(&m.profile.display_name, 34),
-            pad(m.profile.tier.display_name(), 9),
-            pad(&format!("{generation}{marker}"), 12),
-            pad(&format::grams(m.summary.footprint.co2_grams.central), 11),
-            m.grams_per_thousand_output()
-        );
-    }
-    println!("* generation inferred from first appearance in your logs  † from models.json override");
-}
-
-fn print_year(r: &YearInReview, report: &UsageReport, settings: &EquivalentSettings) {
-    let grid = &report.model.grid;
-    let units = |id: &str, grams: f64| equivalents::named(id, grid, settings).map_or(0.0, |e| e.units(grams));
-    println!("Superwarm — your {} in carbon\n", r.year);
-    if r.total_grams <= 0.0 {
-        println!("No coding-agent usage found for {}.", r.year);
-        return;
-    }
-    let fp = r.summary.footprint;
-    println!(
-        "  {} CO2e  (likely {} – {}) from {} responses",
-        format::grams(r.total_grams),
-        format::grams(fp.co2_grams.low),
-        format::grams(fp.co2_grams.high),
-        format::count(r.summary.responses as f64)
-    );
-    println!("  {} of electricity\n", format::energy(fp.energy_wh.central));
-    println!("  That's the same as:");
-    for (id, label) in [
-        ("home-day", "days of an average US home's electricity"),
-        ("commute", "round-trip commutes"),
-        ("flight-nyc-la", "flights from New York to LA"),
-        ("phone", "phone charges"),
-        ("shower", "hot showers"),
-        ("led-year", "years of an LED bulb left on"),
-    ] {
-        println!("    {:>8}  {label}", format::count(units(id, r.total_grams)));
-    }
-    let c = r.counterfactual;
-    if c.on_reference_models > c.actual {
-        println!(
-            "\n  On 2024's models it would have been {} ({:.1}x). Without prompt caching too, {}.",
-            format::grams(c.on_reference_models),
-            c.on_reference_models / c.actual,
-            format::grams(c.without_caching)
-        );
-        let saved = c.on_reference_models - c.actual;
-        println!(
-            "  Newer models kept {} out of the air: {} iPhone charges, {} hot showers.",
-            format::grams(saved),
-            format::count(units("phone", saved)),
-            format::count(units("shower", saved))
-        );
-    }
-    println!();
-    println!("  Tokens read      {}", format::tokens(r.tokens_read));
-    println!("  Novels' worth    {}", format::count(r.novels_written));
-    println!("  Active days      {} (longest streak {})", r.active_days, r.longest_streak);
-    if let Some(day) = &r.busiest_day {
-        let date = Local
-            .timestamp_millis_opt(day.date_ms)
-            .single()
-            .map_or_else(String::new, |d| d.format("%B %-d").to_string());
-        println!("  Heaviest day     {date} ({})", format::grams(day.grams));
-    }
-    println!("  Night owl        {:.0}% between 10 pm and 6 am", r.night_share * 100.0);
-    if let Some(model) = &r.top_model {
-        println!("  Top model        {} ({:.0}%)", model.name, model.fraction * 100.0);
-    }
-    println!("\n  To absorb it all: {} trees growing for a decade.", units("tree", r.total_grams).ceil().max(1.0));
+    out
 }

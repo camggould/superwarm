@@ -122,7 +122,7 @@ pub fn build<Tz: TimeZone>(
     }
 }
 
-fn period_snapshot<Tz: TimeZone>(
+pub fn period_snapshot<Tz: TimeZone>(
     report: &UsageReport,
     period: Period,
     first_record_ms: Option<i64>,

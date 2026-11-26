@@ -12,6 +12,7 @@ pub mod emissions;
 pub mod equivalents;
 pub mod format;
 pub mod lines;
+pub mod render;
 pub mod report;
 pub mod review;
 pub mod scanner;

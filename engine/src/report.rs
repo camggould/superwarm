@@ -147,6 +147,33 @@ impl Bucket {
         };
         naive.map_or(ms, |n| local_ms(tz, n))
     }
+
+    /// Start of the bucket after the one starting at `start_ms`.
+    pub fn next<Tz: TimeZone>(self, start_ms: i64, tz: &Tz) -> i64 {
+        let local = local_naive(tz, start_ms);
+        let next = match self {
+            Bucket::Hour => local + Duration::hours(1),
+            Bucket::Day => local + Duration::days(1),
+            Bucket::Week => local + Duration::days(7),
+            Bucket::Month => {
+                let (y, m) =
+                    if local.month() == 12 { (local.year() + 1, 1) } else { (local.year(), local.month() + 1) };
+                NaiveDate::from_ymd_opt(y, m, 1).and_then(|d| d.and_hms_opt(0, 0, 0)).unwrap_or(local)
+            }
+        };
+        local_ms(tz, next).max(start_ms + 1)
+    }
+
+    /// Every bucket start from the one containing `from_ms` up to (not including) `to_ms`.
+    pub fn starts<Tz: TimeZone>(self, from_ms: i64, to_ms: i64, tz: &Tz) -> Vec<i64> {
+        let mut starts = Vec::new();
+        let mut current = self.start(from_ms, tz);
+        while current < to_ms && starts.len() < 10_000 {
+            starts.push(current);
+            current = self.next(current, tz);
+        }
+        starts
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
@@ -407,6 +434,13 @@ mod tests {
         assert_eq!(points.len(), 2);
         assert!((points[0].co2_grams - 2.0 * points[1].co2_grams).abs() < 1e-9);
         assert_eq!(Period::Today.bucket(), Bucket::Hour);
+    }
+
+    #[test]
+    fn steps_through_buckets() {
+        let days = Bucket::Day.starts(ms(2026, 11, 1, 15, 0), ms(2026, 11, 4, 0, 0), &Utc);
+        assert_eq!(days, [ms(2026, 11, 1, 0, 0), ms(2026, 11, 2, 0, 0), ms(2026, 11, 3, 0, 0)]);
+        assert_eq!(Bucket::Month.next(ms(2026, 12, 1, 0, 0), &Utc), ms(2027, 1, 1, 0, 0));
     }
 
     #[test]
