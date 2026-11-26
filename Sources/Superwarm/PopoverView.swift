@@ -133,43 +133,46 @@ struct EquivalentsRow: View {
     let settings: AppSettings
 
     var body: some View {
-        let picks = Equivalents.highlights(for: grams, grid: settings.grid, settings: settings.equivalents, limit: 3)
-        HStack(alignment: .top, spacing: 0) {
-            ForEach(picks) { e in
+        let picks = Equivalents.headline(for: grams, grid: settings.grid, settings: settings.equivalents)
+        HStack(spacing: 0) {
+            ForEach(Array(picks.enumerated()), id: \.element.id) { index, e in
+                if index > 0 {
+                    Divider().frame(height: 44)
+                }
                 let (value, label) = phrasing(e, units: e.units(for: grams))
-                VStack(alignment: .leading, spacing: 3) {
-                    Image(systemName: e.symbol)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.moss)
-                    Text(value)
-                        .font(.system(size: 17, weight: .semibold))
-                        .monospacedDigit()
+                VStack(spacing: 3) {
+                    HStack(spacing: 5) {
+                        Image(systemName: e.symbol)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.moss)
+                        Text(value)
+                            .font(.system(size: 17, weight: .semibold))
+                            .monospacedDigit()
+                    }
                     Text(label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity)
                 .help(e.phrase(for: grams) + ". " + e.note)
             }
         }
     }
 
-    /// Short labels; fractions of one thing read as a percentage.
+    /// Short labels. Fractions of one thing read as a percentage, and less
+    /// than an hour of home electricity reads in minutes.
     private func phrasing(_ e: Equivalent, units n: Double) -> (String, String) {
         let short: [String: (String, String)] = [
-            "car-mile": ("mile driven", "miles driven"),
             "commute": ("commute", "commutes"),
-            "kettle": ("kettle boil", "kettle boils"),
-            "phone": ("phone charge", "phone charges"),
-            "streaming": ("hour streaming", "hours streaming"),
-            "flight-km": ("km flown", "km flown"),
-            "gasoline": ("gallon of gas", "gallons of gas"),
-            "burger": ("burger", "burgers"),
-            "us-day": ("day of a US life", "days of a US life"),
-            "tree": ("tree-decade", "tree-decades"),
-            "gemini-prompt": ("chat prompt", "chat prompts"),
+            "burger": ("beef burger", "beef burgers"),
+            "home-hour": ("hour of home power", "hours of home power"),
+            "home-day": ("day of home power", "days of home power"),
         ]
         let (one, many) = short[e.id] ?? (e.singular, e.plural)
+        if e.id == "home-hour" && n < 1 {
+            return ("\(max(1, Int((n * 60).rounded()))) min", "of home power")
+        }
         if n < 1 && n >= 0.005 {
             return ("\(Int((n * 100).rounded()))%", "of a \(one)")
         }
