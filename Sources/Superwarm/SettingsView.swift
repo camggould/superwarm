@@ -50,6 +50,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .tint(Theme.moss)
         .frame(width: 460)
         .padding(.vertical, 8)
     }
