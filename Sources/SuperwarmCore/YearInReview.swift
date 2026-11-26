@@ -44,7 +44,9 @@ public struct YearInReview: Sendable {
     /// Share of emissions between 10 pm and 6 am.
     public var nightShare: Double {
         guard totalGrams > 0 else { return 0 }
-        let night = (22..<24).map { hourly[$0] }.reduce(0, +) + (0..<6).map { hourly[$0] }.reduce(0, +)
+        let nightHours = Array(22..<24) + Array(0..<6)
+        var night = 0.0
+        for hour in nightHours { night += hourly[hour] }
         return night / totalGrams
     }
 
