@@ -1,13 +1,23 @@
 import SwiftUI
-import SuperwarmCore
+import SuperwarmKit
 
 struct MethodologyView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let c = model.report?.model.coefficients ?? EnergyCoefficients()
-        let grid = model.settings.grid
-        ScrollView {
+        if let snapshot = model.snapshot {
+            content(snapshot)
+        } else {
+            ProgressView().frame(width: 600, height: 680)
+        }
+    }
+
+    /// Coefficients and sources come from the engine, so this window always
+    /// describes the model that produced the numbers.
+    private func content(_ snapshot: Snapshot) -> some View {
+        let c = snapshot.coefficients
+        let grid = snapshot.grid
+        return ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 section("How the estimate works") {
                     Text("Superwarm reads the token counts your coding agents already log locally. Nothing leaves your Mac. Each response is converted to energy, then to carbon:")
@@ -21,8 +31,8 @@ struct MethodologyView: View {
                 section("Assumptions") {
                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                         row("Large model, 2024 generation", "\(fmt(c.baseWhPer1kOutput.central)) Wh / 1k output tokens", spread: c.baseWhPer1kOutput.spread)
-                        row("Medium tier (Sonnet-class)", "× \(fmt(c.tierMultiplier[.medium]!.central))", spread: c.tierMultiplier[.medium]!.spread)
-                        row("Small tier (Haiku / mini)", "× \(fmt(c.tierMultiplier[.small]!.central))", spread: c.tierMultiplier[.small]!.spread)
+                        row("Medium tier (Sonnet-class)", "× \(fmt(c.tierMedium.central))", spread: c.tierMedium.spread)
+                        row("Small tier (Haiku / mini)", "× \(fmt(c.tierSmall.central))", spread: c.tierSmall.spread)
                         row("Uncached input token", "× \(fmt(c.inputToOutputRatio.central)) of an output token", spread: c.inputToOutputRatio.spread)
                         row("Cache read", "× \(fmt(c.cacheReadToInputRatio.central)) of an input token", spread: c.cacheReadToInputRatio.spread)
                         row("Cache write", "× \(fmt(c.cacheWriteToInputRatio.central)) of an input token", spread: c.cacheWriteToInputRatio.spread)
@@ -44,7 +54,7 @@ struct MethodologyView: View {
                 }
 
                 section("Sources") {
-                    ForEach(Citations.all) { citation in
+                    ForEach(snapshot.citations) { citation in
                         VStack(alignment: .leading, spacing: 2) {
                             Link("\(citation.title)", destination: citation.url)
                             Text("\(citation.publisher), \(String(citation.year)). \(citation.usedFor)")

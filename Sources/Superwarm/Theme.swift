@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import SuperwarmCore
+import SuperwarmKit
 
 /// Earthy accent colors on native surfaces. Every color has its own light and dark step.
 enum Theme {

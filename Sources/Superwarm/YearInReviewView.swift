@@ -1,7 +1,7 @@
 import AppKit
 import Charts
 import SwiftUI
-import SuperwarmCore
+import SuperwarmKit
 
 /// One full-bleed card in the year-in-review slideshow.
 struct Slide: Identifiable {
@@ -31,7 +31,8 @@ enum SlideDeck {
     static let forest = Color(red: 0.14, green: 0.22, blue: 0.16)
     static let ember = Color(red: 0.40, green: 0.13, blue: 0.09)
 
-    static func make(_ r: YearInReview, settings: AppSettings) -> [Slide] {
+    /// Slides for a review; everyday comparisons come from the engine's equivalents table.
+    static func make(_ r: YearInReview, snapshot: Snapshot) -> [Slide] {
         guard r.totalGrams > 0 else {
             return [Slide(id: "empty", background: soil, lightText: true, kicker: String(r.year),
                           headline: "Nothing to review yet",
@@ -39,12 +40,12 @@ enum SlideDeck {
         }
         let grams = r.totalGrams
         let fp = r.summary.footprint
-        let all = Equivalents.all(grid: settings.grid, settings: settings.equivalents)
-        func units(_ id: String, of amount: Double? = nil) -> Double { all.first { $0.id == id }!.units(for: amount ?? grams) }
+        let all = snapshot.equivalents
+        func units(_ id: String, of amount: Double? = nil) -> Double { snapshot.units(id, of: amount ?? grams) }
         /// Symbol, value and label for an equivalent of `amount` grams.
         func item(_ id: String, _ label: String, of amount: Double? = nil) -> (String, String, String) {
-            let e = all.first { $0.id == id }!
-            return (e.symbol, friendly(e.units(for: amount ?? grams)), label)
+            let e = all.first { $0.id == id }
+            return (e?.symbol ?? "questionmark", friendly(e?.units(for: amount ?? grams) ?? 0), label)
         }
         let monthName: [String] = DateFormatter().monthSymbols ?? []
 
@@ -352,14 +353,15 @@ struct YearInReviewView: View {
     static let size = CGSize(width: 520, height: 640)
 
     var body: some View {
-        let review = currentReview
-        let slides = review.map { SlideDeck.make($0, settings: model.settings) } ?? []
+        let snapshot = model.snapshot
+        let review = snapshot?.review
+        let slides = snapshot.map { SlideDeck.make($0.review, snapshot: $0) } ?? []
         Group {
-            if let review, !slides.isEmpty {
+            if let review, let snapshot, !slides.isEmpty {
                 let i = min(index, slides.count - 1)
                 Group {
                     if slides[i].id == "share" {
-                        SharePage(review: review, settings: model.settings, index: i, count: slides.count)
+                        SharePage(review: review, snapshot: snapshot, index: i, count: slides.count)
                     } else {
                         SlideView(slide: slides[i], index: i, count: slides.count)
                             .contentShape(Rectangle())
@@ -386,12 +388,6 @@ struct YearInReviewView: View {
         }
     }
 
-    private var currentReview: YearInReview? {
-        guard let report = model.report else { return nil }
-        let year = YearInReview.seasonalYear() ?? Calendar.current.component(.year, from: Date())
-        return YearInReview(report: report, year: year)
-    }
-
     private func advance(count: Int) {
         if index >= count - 1 {
             dismiss()
@@ -408,12 +404,12 @@ struct YearInReviewView: View {
 /// Deliberately leaves out project names, which can be private.
 struct ShareCard: View {
     let review: YearInReview
-    let settings: AppSettings
+    let snapshot: Snapshot
 
     static let size = CGSize(width: 540, height: 675)
 
     private func units(_ id: String) -> Double {
-        Equivalents.named(id, grid: settings.grid, settings: settings.equivalents)?.units(for: review.totalGrams) ?? 0
+        snapshot.units(id, of: review.totalGrams)
     }
 
     private var saved: Double { max(0, review.counterfactual.onReferenceModels - review.counterfactual.actual) }
@@ -507,8 +503,8 @@ struct ShareCard: View {
 
     /// The card as a 1080×1350 image.
     @MainActor
-    static func image(review: YearInReview, settings: AppSettings) -> NSImage? {
-        let renderer = ImageRenderer(content: ShareCard(review: review, settings: settings).environment(\.colorScheme, .dark))
+    static func image(review: YearInReview, snapshot: Snapshot) -> NSImage? {
+        let renderer = ImageRenderer(content: ShareCard(review: review, snapshot: snapshot).environment(\.colorScheme, .dark))
         renderer.scale = 2
         return renderer.nsImage
     }
@@ -522,20 +518,20 @@ struct ShareCard: View {
 /// The final slide: the card plus save, copy and share actions.
 struct SharePage: View {
     let review: YearInReview
-    let settings: AppSettings
+    let snapshot: Snapshot
     let index: Int
     let count: Int
     @State private var copied = false
 
     var body: some View {
-        let image = ShareCard.image(review: review, settings: settings)
+        let image = ShareCard.image(review: review, snapshot: snapshot)
         VStack(spacing: 16) {
             HStack(spacing: 4) {
                 ForEach(0..<count, id: \.self) { _ in
                     Capsule().fill(.white.opacity(0.9)).frame(height: 3)
                 }
             }
-            ShareCard(review: review, settings: settings)
+            ShareCard(review: review, snapshot: snapshot)
                 .scaleEffect(0.72)
                 .frame(width: ShareCard.size.width * 0.72, height: ShareCard.size.height * 0.72)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

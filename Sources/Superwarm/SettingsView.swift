@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import SuperwarmCore
+import SuperwarmKit
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
@@ -74,7 +74,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                 HStack {
                     Button("Edit model overrides…") { openOverrides() }
-                    Button("Apply") { Task { await model.rebuildReport() } }
+                    Button("Apply") { Task { await model.refresh() } }
                 }
             }
         }
@@ -85,7 +85,7 @@ struct SettingsView: View {
     }
 
     private func openOverrides() {
-        let url = ModelOverride.defaultURL
+        let url = AppPaths.modelOverrides
         if !FileManager.default.fileExists(atPath: url.path) {
             let template = """
             [

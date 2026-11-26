@@ -1,7 +1,7 @@
 import AppKit
 import Charts
 import SwiftUI
-import SuperwarmCore
+import SuperwarmKit
 
 struct PopoverView: View {
     @Environment(AppModel.self) private var model
@@ -42,24 +42,31 @@ struct PopoverView: View {
 
     @ViewBuilder
     private var content: some View {
-        if model.report == nil {
+        if let snapshot = model.snapshot, let current = model.current {
+            if current.summary.responses == 0 {
+                Text("No usage in this period.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 300)
+            } else {
+                VStack(alignment: .leading, spacing: 22) {
+                    Hero(footprint: current.summary.footprint)
+                    EquivalentsRow(grams: current.summary.footprint.co2Grams.central,
+                                   picks: current.headline.compactMap(snapshot.equivalent))
+                    TimelineChart()
+                    ComparisonsList()
+                    ModelsList()
+                }
+                .padding(.top, 6)
+            }
+        } else if let error = model.engineError {
+            Text(error)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 300)
+        } else {
             ProgressView()
                 .controlSize(.small)
                 .frame(maxWidth: .infinity, minHeight: 300)
-        } else if model.summary.responses == 0 {
-            Text("No usage in this period.")
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 300)
-        } else {
-            let summary = model.summary
-            VStack(alignment: .leading, spacing: 22) {
-                Hero(footprint: summary.footprint)
-                EquivalentsRow(grams: summary.footprint.co2Grams.central, settings: model.settings)
-                TimelineChart()
-                ComparisonsList()
-                ModelsList()
-            }
-            .padding(.top, 6)
         }
     }
 
@@ -84,7 +91,7 @@ struct PopoverView: View {
                 }
                 .help("A new version of Superwarm is ready to install")
             }
-            if let year = YearInReview.seasonalYear(), model.report != nil {
+            if let year = model.snapshot?.seasonalYear {
                 Button {
                     openWindow(id: "year-in-review")
                     NSApp.activate()
@@ -153,10 +160,10 @@ struct Hero: View {
 
 struct EquivalentsRow: View {
     let grams: Double
-    let settings: AppSettings
+    /// The engine's three headline comparisons for this amount.
+    let picks: [Equivalent]
 
     var body: some View {
-        let picks = Equivalents.headline(for: grams, grid: settings.grid, settings: settings.equivalents)
         HStack(spacing: 0) {
             ForEach(Array(picks.enumerated()), id: \.element.id) { index, e in
                 if index > 0 {
@@ -210,8 +217,8 @@ struct TimelineChart: View {
     @State private var selection: Date?
 
     var body: some View {
-        let unit = UsageReport.bucket(for: model.period)
-        let points = model.report?.timeline(in: model.interval, by: unit) ?? []
+        let unit = model.current?.bucket.calendarComponent ?? .day
+        let points = model.current?.timeline ?? []
         let providers = Provider.allCases.filter { p in points.contains { $0.provider == p } }
         VStack(alignment: .leading, spacing: 6) {
             Chart(points) { point in
@@ -322,9 +329,9 @@ struct ComparisonsList: View {
     }
 
     private var rows: [Row] {
-        guard let report = model.report else { return [] }
-        let summary = model.summary
-        let current = summary.footprint.co2Grams.central
+        guard let current = model.current else { return [] }
+        let summary = current.summary
+        let grams = summary.footprint.co2Grams.central
         var rows: [Row] = []
 
         // Newer models vs the same work on 2024-era models.
@@ -332,40 +339,30 @@ struct ComparisonsList: View {
         if baseline > 0 {
             rows.append(Row(
                 id: "generation", symbol: "leaf.fill",
-                text: relative(current, to: baseline, than: "than on 2024 models"),
-                delta: current - baseline,
+                text: relative(grams, to: baseline, than: "than on 2024 models"),
+                delta: grams - baseline,
                 help: "The same tokens on 2024-era models of the same size would have emitted \(Format.grams(baseline)). Assumes energy per token falls ~1.7× per year."
             ))
         }
 
-        // This period vs the one before, cut off at the same point. Skipped when
-        // the logs don't reach back over the whole earlier window.
-        let firstRecord = report.entries.lazy.map(\.record.timestamp).min()
-        if let label = model.period.previousLabel,
-           let previousInterval = model.period.previousInterval(),
-           let firstRecord, firstRecord <= previousInterval.start {
-            let previous = report.summary(in: previousInterval).footprint.co2Grams.central
-            if previous > 0 {
-                rows.append(Row(
-                    id: "previous", symbol: current <= previous ? "arrow.down.right" : "arrow.up.right",
-                    text: relative(current, to: previous, than: "than \(label)"),
-                    delta: current - previous,
-                    help: "\(Format.grams(previous)) over the same stretch of \(label)."
-                ))
-            }
+        // This period vs the same stretch of the one before. The engine only
+        // reports it when the logs reach back over the whole earlier window.
+        if let previous = current.previous {
+            rows.append(Row(
+                id: "previous", symbol: grams <= previous.co2Grams ? "arrow.down.right" : "arrow.up.right",
+                text: relative(grams, to: previous.co2Grams, than: "than \(previous.label)"),
+                delta: grams - previous.co2Grams,
+                help: "\(Format.grams(previous.co2Grams)) over the same stretch of \(previous.label)."
+            ))
         }
 
         // Tip: the large-model work on mid-size models. A what-if, not an achievement.
-        let swap = report.whatIf(tier: .large, as: .medium, in: model.interval)
-        if swap.actual > 0 {
-            let saving = swap.actual - swap.alternative
-            let largeModels = report.byModel(in: model.interval).filter { $0.profile.tier == .large }
-            let allClaude = largeModels.allSatisfy { $0.profile.id.contains("opus") }
+        if let tip = current.tierTip {
             rows.append(Row(
                 id: "tier", symbol: "lightbulb",
-                text: allClaude ? "Sonnet-size models instead of Opus" : "Mid-size models instead of flagships",
-                delta: -saving,
-                help: "Your work on large models emitted \(Format.grams(swap.actual)). The same tokens on mid-size models (Sonnet-class) would be about \(Format.grams(swap.alternative)). That assumes the smaller model could do the same work in the same number of tokens, which holds for routine tasks but not always for hard ones.",
+                text: tip.allOpus ? "Sonnet-size models instead of Opus" : "Mid-size models instead of flagships",
+                delta: tip.alternative - tip.actual,
+                help: "Your work on large models emitted \(Format.grams(tip.actual)). The same tokens on mid-size models (Sonnet-class) would be about \(Format.grams(tip.alternative)). That assumes the smaller model could do the same work in the same number of tokens, which holds for routine tasks but not always for hard ones.",
                 isTip: true
             ))
         }
@@ -388,16 +385,16 @@ struct ModelsList: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let rows = Array((model.report?.byModel(in: model.interval) ?? []).prefix(5))
+        let rows = Array((model.current?.models ?? []).prefix(5))
         VStack(spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+            ForEach(Array(rows.enumerated()), id: \.element.rowID) { index, row in
                 if index > 0 { Divider() }
                 HStack {
                     Circle()
                         .fill(Theme.color(for: row.provider))
                         .frame(width: 7, height: 7)
                         .accessibilityLabel(row.provider.displayName)
-                    Text(row.profile.displayName).lineLimit(1)
+                    Text(row.displayName).lineLimit(1)
                     Spacer()
                     Text(Format.grams(row.summary.footprint.co2Grams.central))
                         .monospacedDigit()
@@ -405,7 +402,7 @@ struct ModelsList: View {
                 }
                 .font(.callout)
                 .padding(.vertical, 7)
-                .help("\(row.profile.tier.displayName) model · \(String(format: "%.2f", row.gramsPerThousandOutput)) g per 1k output tokens")
+                .help("\(row.tier.displayName) model · \(String(format: "%.2f", row.gramsPerThousandOutput)) g per 1k output tokens")
             }
         }
     }

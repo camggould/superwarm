@@ -1,27 +1,25 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
+// The macOS menu bar app. Estimation lives in the Rust engine (engine/), which
+// the app bundles and runs; SuperwarmKit decodes its output.
 let package = Package(
     name: "Superwarm",
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "Superwarm", targets: ["Superwarm"]),
-        .executable(name: "superwarm-cli", targets: ["superwarm-cli"]),
-        .library(name: "SuperwarmCore", targets: ["SuperwarmCore"]),
         .library(name: "SuperwarmKit", targets: ["SuperwarmKit"]),
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),
     ],
     targets: [
-        .target(name: "SuperwarmCore"),
         // Decodes the Rust engine's snapshot and runs the engine binary.
         .target(name: "SuperwarmKit"),
-        .executableTarget(name: "superwarm-cli", dependencies: ["SuperwarmCore"]),
         .executableTarget(
             name: "Superwarm",
             dependencies: [
-                "SuperwarmCore",
+                "SuperwarmKit",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             resources: [.copy("Resources/Logo.png")],
@@ -30,7 +28,6 @@ let package = Package(
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
             ]
         ),
-        .testTarget(name: "SuperwarmCoreTests", dependencies: ["SuperwarmCore"]),
         .testTarget(
             name: "SuperwarmKitTests",
             dependencies: ["SuperwarmKit"],
