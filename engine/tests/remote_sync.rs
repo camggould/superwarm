@@ -97,7 +97,8 @@ fn pulls_usage_from_a_remote_over_ssh() {
     assert_eq!(sync[0]["added"], 1);
     assert!(sync[0]["error"].is_null());
 
-    let report = w.ok(&["report", "today"]);
+    // Records are minutes old; the 7-day period holds them even just after midnight.
+    let report = w.ok(&["report", "week"]);
     assert!(report.contains("By machine"), "{report}");
     assert!(report.contains("devbox"), "{report}");
     assert!(report.contains("1 remote(s), synced just now"), "{report}");
@@ -114,18 +115,19 @@ fn pulls_usage_from_a_remote_over_ssh() {
     let snapshot: serde_json::Value = serde_json::from_str(&w.ok(&["snapshot"])).unwrap();
     assert_eq!(snapshot["remotes"][0]["name"], "devbox");
     assert_eq!(snapshot["remotes"][0]["responses"], 2);
-    let today = &snapshot["periods"][0];
-    assert_eq!(today["summary"]["responses"], 3);
-    assert_eq!(today["machines"].as_array().unwrap().len(), 2);
+    let week = &snapshot["periods"][1];
+    assert_eq!(week["period"], "week");
+    assert_eq!(week["summary"]["responses"], 3);
+    assert_eq!(week["machines"].as_array().unwrap().len(), 2);
 
     // --local-only leaves the remote out.
     let local: serde_json::Value = serde_json::from_str(&w.ok(&["snapshot", "--local-only"])).unwrap();
-    assert_eq!(local["periods"][0]["summary"]["responses"], 1);
+    assert_eq!(local["periods"][1]["summary"]["responses"], 1);
 
     // Removing the remote forgets its usage.
     w.ok(&["remote", "remove", "devbox"]);
     let after: serde_json::Value = serde_json::from_str(&w.ok(&["snapshot"])).unwrap();
-    assert_eq!(after["periods"][0]["summary"]["responses"], 1);
+    assert_eq!(after["periods"][1]["summary"]["responses"], 1);
     assert!(after["remotes"].as_array().unwrap().is_empty());
 }
 
