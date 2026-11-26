@@ -4,6 +4,7 @@ import SuperwarmCore
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var model = model
@@ -37,6 +38,13 @@ struct SettingsView: View {
                 Picker("Show", selection: $model.settings.menuBarPeriod) {
                     ForEach(AppSettings.MenuBarPeriod.allCases) { Text($0.label).tag($0) }
                 }
+            }
+
+            Section("Year in Carbon") {
+                Text("A year-in-review slideshow appears in the menu from December 1 to January 15.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Preview now") { openWindow(id: "year-in-review") }
             }
 
             Section("Models") {

@@ -72,6 +72,17 @@ struct PopoverView: View {
             if model.isScanning {
                 ProgressView().controlSize(.mini)
             }
+            if let year = YearInReview.seasonalYear(), model.report != nil {
+                Button {
+                    openWindow(id: "year-in-review")
+                    NSApp.activate()
+                } label: {
+                    Label("Your \(String(year)) in carbon", systemImage: "sparkles")
+                        .labelStyle(.titleAndIcon)
+                        .foregroundStyle(Theme.clay)
+                }
+                .help("Your year in review")
+            }
             Spacer()
             Button {
                 openWindow(id: "methodology")

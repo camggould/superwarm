@@ -6,12 +6,17 @@ import SuperwarmCore
 enum Entry {
     static func main() {
         let args = CommandLine.arguments
-        if let flag = args.firstIndex(of: "--render-preview"), args.count > flag + 1 {
-            // Developer aid: render the popover to PNGs without the menu bar.
+        if let flag = args.firstIndex(where: { $0 == "--render-preview" || $0 == "--render-review" }), args.count > flag + 1 {
+            // Developer aid: render the popover or the year-in-review slides to PNGs.
             let base = args[flag + 1]
+            let review = args[flag] == "--render-review"
             let app = NSApplication.shared
             Task { @MainActor in
-                await PreviewRenderer.render(to: base)
+                if review {
+                    await PreviewRenderer.renderReview(to: base)
+                } else {
+                    await PreviewRenderer.render(to: base)
+                }
                 exit(0)
             }
             app.run()
@@ -38,6 +43,13 @@ struct SuperwarmApp: App {
             SettingsView()
                 .environment(model)
         }
+
+        Window("Year in Carbon", id: "year-in-review") {
+            YearInReviewView()
+                .environment(model)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
 
         Window("How Superwarm estimates", id: "methodology") {
             MethodologyView()

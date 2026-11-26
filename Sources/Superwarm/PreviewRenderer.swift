@@ -40,4 +40,36 @@ enum PreviewRenderer {
             window.orderOut(nil)
         }
     }
+
+    /// `Superwarm --render-review /tmp/review` writes one PNG per slide.
+    static func renderReview(to base: String) async {
+        let model = AppModel(autoRefresh: false)
+        await model.refresh()
+        guard let report = model.report else { return }
+        let year = YearInReview.seasonalYear() ?? Calendar.current.component(.year, from: Date())
+        let slides = SlideDeck.make(YearInReview(report: report, year: year), settings: model.settings)
+        for (index, slide) in slides.enumerated() {
+            let view = SlideView(slide: slide, index: index, count: slides.count)
+                .frame(width: YearInReviewView.size.width, height: YearInReviewView.size.height)
+            await snapshot(view, size: YearInReviewView.size, appearance: .aqua,
+                           to: "\(base)-\(String(format: "%02d", index))-\(slide.id).png")
+        }
+    }
+
+    private static func snapshot<V: View>(_ view: V, size: CGSize, appearance: NSAppearance.Name, to path: String) async {
+        let host = NSHostingView(rootView: view)
+        host.frame = NSRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: appearance)
+        window.contentView = host
+        window.setFrameOrigin(NSPoint(x: -10_000, y: -10_000))
+        window.orderFrontRegardless()
+        host.layoutSubtreeIfNeeded()
+        try? await Task.sleep(for: .milliseconds(400))
+        if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+            host.cacheDisplay(in: host.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        }
+        window.orderOut(nil)
+    }
 }
