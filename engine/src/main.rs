@@ -244,6 +244,9 @@ fn remote_statuses(config: &RemoteConfig) -> Vec<RemoteStatus> {
 }
 
 struct Loaded {
+    /// This machine's label next to remotes: its host name, or "laptop" for demo data
+    /// (so committed demo output never carries a real host name).
+    local_machine: String,
     report: UsageReport,
     scan: ScanResult,
     /// Local records only: what `export` sends.
@@ -294,7 +297,8 @@ fn load(options: &Options, now_ms: i64) -> Result<Loaded> {
     records.sort_by_key(|r| r.timestamp_ms);
     let local = scan.records.clone();
     let report = UsageReport::new(records, model, overrides);
-    Ok(Loaded { report, scan, local, remotes, seconds: started.elapsed().as_secs_f64() })
+    let local_machine = if options.demo { "laptop".to_string() } else { paths::hostname() };
+    Ok(Loaded { local_machine, report, scan, local, remotes, seconds: started.elapsed().as_secs_f64() })
 }
 
 /// Parses `--since`: epoch milliseconds, an RFC 3339 timestamp, or a local date.
@@ -354,13 +358,13 @@ fn main() -> Result<()> {
             let first = loaded.report.first_record_ms();
             let mut section = snapshot::period_snapshot(&loaded.report, period, first, &settings, now_ms, &Local);
             if json {
-                section.machines = machine_rows(&loaded.report, section.range);
+                section.machines = machine_rows(&loaded.report, section.range, &loaded.local_machine);
                 println!("{}", serde_json::to_string_pretty(&section)?);
             } else {
                 let view = ReportView {
                     report: &loaded.report,
                     projects: loaded.report.by_project(section.range),
-                    machines: machine_rows(&loaded.report, section.range)
+                    machines: machine_rows(&loaded.report, section.range, &loaded.local_machine)
                         .into_iter()
                         .map(|m| (m.name, m.summary))
                         .collect(),
@@ -406,7 +410,7 @@ fn main() -> Result<()> {
             let stdout = std::io::stdout();
             let mut out = std::io::BufWriter::new(stdout.lock());
             let count =
-                remote::write_export(&loaded.local, since_ms, !no_projects, &paths::hostname(), now_ms, &mut out)?;
+                remote::write_export(&loaded.local, since_ms, !no_projects, &loaded.local_machine, now_ms, &mut out)?;
             out.flush()?;
             eprintln!("Exported {count} responses.");
         }
@@ -455,7 +459,8 @@ fn main() -> Result<()> {
                 let _ = sync_all(None, now_ms);
             }
             let loaded = load(options, now_ms)?;
-            let context = snapshot::Context { local_machine: paths::hostname(), remotes: loaded.remotes.clone() };
+            let context =
+                snapshot::Context { local_machine: loaded.local_machine.clone(), remotes: loaded.remotes.clone() };
             let snapshot =
                 snapshot::build(&loaded.report, scan_info(&loaded.scan), settings, year, now_ms, &Local, context);
             println!("{}", serde_json::to_string(&snapshot)?);
@@ -512,13 +517,17 @@ fn remote_command(command: RemoteCommand, now_ms: i64) -> Result<()> {
     Ok(())
 }
 
-fn machine_rows(report: &UsageReport, range: Option<superwarm::report::TimeRange>) -> Vec<snapshot::MachineRow> {
+fn machine_rows(
+    report: &UsageReport,
+    range: Option<superwarm::report::TimeRange>,
+    local_machine: &str,
+) -> Vec<snapshot::MachineRow> {
     report
         .by_machine(range)
         .into_iter()
         .map(|(name, summary)| snapshot::MachineRow {
             is_local: name.is_none(),
-            name: name.unwrap_or_else(paths::hostname),
+            name: name.unwrap_or_else(|| local_machine.to_string()),
             summary,
         })
         .collect()
