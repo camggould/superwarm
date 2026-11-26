@@ -298,7 +298,7 @@ pub fn report<Tz: TimeZone>(ui: &Ui, v: &ReportView<Tz>) -> String {
                 "     {}  {}  {}",
                 pad(name, name_width),
                 pad_left(&format::grams(g), 8),
-                ui.accent(&bar(share, bar_width))
+                ui.dim(&bar(share, bar_width))
             );
         }
     }
