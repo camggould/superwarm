@@ -432,7 +432,11 @@ fn main() -> Result<()> {
             store.last_sync_ms = Some(now_ms);
             store.last_error = None;
             store.save()?;
-            println!("Imported {added} new responses from {name} ({} in total).", store.records.len());
+            println!(
+                "Imported {} from {name} ({} in total).",
+                responses(added, "new "),
+                format_thousands(store.records.len())
+            );
         }
         Command::Remote(command) => remote_command(command, now_ms)?,
         Command::Sync { name, json } => {
@@ -444,7 +448,12 @@ fn main() -> Result<()> {
             } else {
                 for o in &outcomes {
                     match &o.error {
-                        None => println!("{}: {} new responses ({} in total)", o.name, o.added, o.total),
+                        None => println!(
+                            "{}: {} ({} in total)",
+                            o.name,
+                            responses(o.added, "new "),
+                            format_thousands(o.total)
+                        ),
                         Some(error) => println!("{}: failed: {error}", o.name),
                     }
                 }
@@ -498,7 +507,7 @@ fn remote_command(command: RemoteCommand, now_ms: i64) -> Result<()> {
                         (Some(t), None) => format!("synced {}", ago(t, now_ms)),
                         (Some(t), Some(e)) => format!("last attempt {} failed: {e}", ago(t, now_ms)),
                     };
-                    println!("{}  ({via}) · {} responses · {when}", s.name, s.responses);
+                    println!("{}  ({via}) · {} · {when}", s.name, responses(s.responses, ""));
                 }
             }
         }
@@ -561,6 +570,11 @@ fn footer(loaded: &Loaded, now_ms: i64) -> String {
     format!("Estimates with a ~90% range · {source}{remotes} · sources: superwarm sources{issues}")
 }
 
+/// "1 new response", "11,252 new responses".
+fn responses(n: usize, adjective: &str) -> String {
+    format!("{} {adjective}response{}", format_thousands(n), if n == 1 { "" } else { "s" })
+}
+
 fn format_thousands(n: usize) -> String {
     let digits = n.to_string();
     let mut out = String::new();
@@ -588,5 +602,11 @@ mod tests {
             "2026-11-01 00:00"
         );
         assert!(parse_since("yesterday").is_err());
+    }
+
+    #[test]
+    fn counts_read_naturally() {
+        assert_eq!(responses(1, "new "), "1 new response");
+        assert_eq!(responses(11_252, ""), "11,252 responses");
     }
 }
