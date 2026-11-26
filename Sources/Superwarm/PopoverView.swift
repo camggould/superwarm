@@ -10,6 +10,8 @@ struct PopoverView: View {
     @Environment(\.openSettings) private var openSettings
 
     static let size = CGSize(width: 440, height: 560)
+    /// The popover's height; the preview renderer uses a taller one to show everything.
+    var height: CGFloat = Self.size.height
 
     var body: some View {
         @Bindable var model = model
@@ -37,7 +39,7 @@ struct PopoverView: View {
             Divider()
             footer
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: Self.size.width, height: height)
     }
 
     @ViewBuilder
@@ -55,6 +57,7 @@ struct PopoverView: View {
                     TimelineChart()
                     ComparisonsList()
                     ModelsList()
+                    MachinesList()
                 }
                 .padding(.top, 6)
             }
@@ -403,6 +406,42 @@ struct ModelsList: View {
                 .font(.callout)
                 .padding(.vertical, 7)
                 .help("\(row.tier.displayName) model · \(String(format: "%.2f", row.gramsPerThousandOutput)) g per 1k output tokens")
+            }
+        }
+    }
+}
+
+// MARK: - Machines
+
+/// Shown only when usage comes from more than one machine (`superwarm sync`).
+struct MachinesList: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let machines = model.current?.machines ?? []
+        if machines.count > 1 {
+            let total = machines.reduce(0) { $0 + $1.summary.footprint.co2Grams.central }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(machines.enumerated()), id: \.element.id) { index, machine in
+                    if index > 0 { Divider() }
+                    HStack {
+                        Image(systemName: machine.isLocal ? "laptopcomputer" : "server.rack")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
+                        Text(machine.name).lineLimit(1)
+                        Spacer()
+                        Text(total > 0 ? "\(Int((machine.summary.footprint.co2Grams.central / total * 100).rounded()))%" : "")
+                            .foregroundStyle(.tertiary)
+                            .monospacedDigit()
+                        Text(Format.grams(machine.summary.footprint.co2Grams.central))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: 56, alignment: .trailing)
+                    }
+                    .font(.callout)
+                    .padding(.vertical, 7)
+                    .help(machine.isLocal ? "This Mac" : "Synced over SSH with superwarm sync")
+                }
             }
         }
     }

@@ -133,6 +133,26 @@ public struct TierTip: Codable, Sendable {
     public var allOpus: Bool
 }
 
+/// Usage from one machine: this one, or a remote synced with `superwarm sync`.
+public struct MachineRow: Codable, Sendable, Identifiable {
+    public var name: String
+    public var isLocal: Bool
+    public var summary: Summary
+    public var id: String { name }
+}
+
+/// A remote machine's sync state.
+public struct RemoteStatus: Codable, Sendable, Identifiable {
+    public var name: String
+    /// The ssh target, or nil for machines added with `superwarm import`.
+    public var ssh: String?
+    public var lastSyncMs: Int64?
+    public var lastError: String?
+    public var responses: Int
+    public var id: String { name }
+    public var lastSync: Date? { lastSyncMs.map(Date.init(milliseconds:)) }
+}
+
 public struct PeriodSnapshot: Codable, Sendable {
     public var period: Period
     public var label: String
@@ -147,6 +167,8 @@ public struct PeriodSnapshot: Codable, Sendable {
     public var tierTip: TierTip?
     /// Ids of the three headline equivalents.
     public var headline: [String]
+    /// Usage per machine, largest first (engine 0.2+).
+    public var machines: [MachineRow]?
 }
 
 public struct Equivalent: Codable, Sendable, Identifiable, Hashable {
@@ -270,6 +292,10 @@ public struct Snapshot: Codable, Sendable {
     /// Set from December 1 to January 15: the year the review covers.
     public var seasonalYear: Int?
     public var review: YearInReview
+    /// This machine's host name (engine 0.2+).
+    public var localMachine: String?
+    /// Remote machines whose usage is included (engine 0.2+).
+    public var remotes: [RemoteStatus]?
 
     public func period(_ period: Period) -> PeriodSnapshot? {
         periods.first { $0.period == period }

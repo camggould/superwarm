@@ -61,6 +61,8 @@ struct SettingsView: View {
                 }
             }
 
+            RemoteMachinesSection()
+
             Section("Year in Carbon") {
                 Text("A year-in-review slideshow appears in the menu from December 1 to January 15.")
                     .font(.caption)
@@ -97,5 +99,88 @@ struct SettingsView: View {
             try? template.write(to: url, atomically: true, encoding: .utf8)
         }
         NSWorkspace.shared.open(url)
+    }
+}
+
+/// Remote machines whose usage is pulled in over SSH (`superwarm remote`).
+struct RemoteMachinesSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var name = ""
+    @State private var host = ""
+    @State private var error: String?
+    @State private var busy = false
+
+    var body: some View {
+        Section {
+            let remotes = model.snapshot?.remotes ?? []
+            ForEach(remotes) { remote in
+                HStack(alignment: .firstTextBaseline) {
+                    Image(systemName: remote.lastError == nil ? "server.rack" : "exclamationmark.triangle")
+                        .foregroundStyle(remote.lastError == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.clay))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(remote.name)
+                        Text(status(remote))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                    Button(role: .destructive) {
+                        run { try await model.removeRemote(remote.name) }
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Remove \(remote.name) and the usage synced from it")
+                }
+            }
+            HStack {
+                TextField("Name", text: $name, prompt: Text("devbox"))
+                    .frame(width: 110)
+                TextField("SSH", text: $host, prompt: Text("me@devbox.example.com"))
+                Button("Add") {
+                    let (n, h) = (name.trimmingCharacters(in: .whitespaces), host.trimmingCharacters(in: .whitespaces))
+                    run {
+                        try await model.addRemote(name: n, ssh: h)
+                        name = ""
+                        host = ""
+                    }
+                }
+                .disabled(name.isEmpty || host.isEmpty || busy)
+            }
+            if let error {
+                Text(error).font(.caption).foregroundStyle(Theme.clay)
+            }
+            HStack {
+                Text("Install the CLI there with the one-line installer. Superwarm connects with your SSH keys, without prompting, every 15 minutes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !remotes.isEmpty {
+                    Button(busy ? "Syncing…" : "Sync Now") { run { await model.syncRemotes() } }
+                        .disabled(busy)
+                }
+            }
+        } header: {
+            Text("Remote machines")
+        }
+    }
+
+    private func status(_ remote: RemoteStatus) -> String {
+        let via = remote.ssh.map { "ssh \($0)" } ?? "imported"
+        let when = remote.lastSync.map { $0.formatted(.relative(presentation: .named)) } ?? "never"
+        if let error = remote.lastError {
+            return "\(via) · last attempt \(when) failed: \(error)"
+        }
+        return "\(via) · \(remote.responses) responses · synced \(when)"
+    }
+
+    private func run(_ action: @escaping () async throws -> Void) {
+        busy = true
+        error = nil
+        Task {
+            do { try await action() } catch { self.error = "\(error)" }
+            busy = false
+        }
     }
 }

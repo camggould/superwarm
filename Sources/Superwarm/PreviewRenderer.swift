@@ -3,7 +3,7 @@ import SwiftUI
 import SuperwarmKit
 
 /// Renders the popover offscreen in light and dark mode, using real logs.
-/// `Superwarm --render-preview /tmp/superwarm` writes today and 30-day views in light and dark.
+/// `Superwarm --render-preview /tmp/superwarm` writes today and 30-day views in light and dark, plus the Settings window.
 ///
 /// The view is hosted in an offscreen window and snapshotted with
 /// `cacheDisplay`, so native AppKit controls (segmented picker, scroll view)
@@ -45,6 +45,21 @@ enum PreviewRenderer {
             }
             window.orderOut(nil)
         }
+        // The whole scrolling content, to check sections below the fold.
+        model.period = .month
+        let tallSize = CGSize(width: PopoverView.size.width, height: 1150)
+        let tall = PopoverView(height: tallSize.height)
+            .environment(model)
+            .background(Color(nsColor: .windowBackgroundColor))
+        await capture(tall, size: tallSize, appearance: .aqua, to: "\(base)-month-full.png")
+
+        let settingsSize = CGSize(width: 460, height: 1100)
+        let settings = SettingsView()
+            .environment(model)
+            .environment(Updates())
+            .frame(width: settingsSize.width, height: settingsSize.height, alignment: .top)
+            .background(Color(nsColor: .windowBackgroundColor))
+        await capture(settings, size: settingsSize, appearance: .aqua, to: "\(base)-settings.png")
     }
 
     /// `Superwarm --render-review /tmp/review` writes one PNG per slide.

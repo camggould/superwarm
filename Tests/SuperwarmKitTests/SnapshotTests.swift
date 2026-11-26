@@ -24,6 +24,11 @@ import Testing
         #expect(snapshot.review.monthly.count == 12)
         #expect(snapshot.review.counterfactual.withoutCaching > snapshot.review.counterfactual.onReferenceModels)
         #expect(snapshot.coefficients.baseWhPer1kOutput.central == 0.9)
+        // The demo year puts some sessions on a synthetic remote box.
+        let machines = try #require(month.machines)
+        #expect(machines.contains { $0.name == "devbox" && !$0.isLocal })
+        #expect(machines.contains { $0.isLocal })
+        #expect(snapshot.localMachine != nil)
     }
 
     @Test func rejectsOtherSchemaVersions() throws {
@@ -37,8 +42,8 @@ import Testing
     }
 
     @Test func passesSettingsToTheEngine() {
-        let args = EngineOptions(gramsCO2PerKWh: 50, pue: 1.1, commuteMilesOneWay: 5, demo: true).arguments
-        #expect(args == ["snapshot", "--grid", "50.0", "--pue", "1.1", "--commute", "5.0", "--demo"])
+        let args = EngineOptions(gramsCO2PerKWh: 50, pue: 1.1, commuteMilesOneWay: 5, demo: true, sync: true).arguments
+        #expect(args == ["snapshot", "--grid", "50.0", "--pue", "1.1", "--commute", "5.0", "--demo", "--sync"])
     }
 
     /// Runs the real engine when it has been built (`cargo build --release` in engine/).

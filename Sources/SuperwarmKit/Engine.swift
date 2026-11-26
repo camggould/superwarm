@@ -7,12 +7,18 @@ public struct EngineOptions: Sendable, Equatable {
     public var commuteMilesOneWay: Double
     /// Use the engine's synthetic demo year instead of real logs.
     public var demo: Bool
+    /// Pull new usage from remote machines over SSH first.
+    public var sync: Bool
 
-    public init(gramsCO2PerKWh: Double = 373, pue: Double = 1.15, commuteMilesOneWay: Double = 11.7, demo: Bool = false) {
+    public init(
+        gramsCO2PerKWh: Double = 373, pue: Double = 1.15, commuteMilesOneWay: Double = 11.7,
+        demo: Bool = false, sync: Bool = false
+    ) {
         self.gramsCO2PerKWh = gramsCO2PerKWh
         self.pue = pue
         self.commuteMilesOneWay = commuteMilesOneWay
         self.demo = demo
+        self.sync = sync
     }
 
     var arguments: [String] {
@@ -23,6 +29,7 @@ public struct EngineOptions: Sendable, Equatable {
             "--commute", String(commuteMilesOneWay),
         ]
         if demo { args.append("--demo") }
+        if sync { args.append("--sync") }
         return args
     }
 }
@@ -87,9 +94,16 @@ public struct Engine: Sendable {
 
     /// Runs `superwarm snapshot` synchronously; call it off the main thread.
     public func snapshot(_ options: EngineOptions) throws -> Snapshot {
+        try Self.decode(run(options.arguments))
+    }
+
+    /// Runs any engine command synchronously and returns its standard output.
+    /// Call it off the main thread.
+    @discardableResult
+    public func run(_ arguments: [String]) throws -> Data {
         let process = Process()
         process.executableURL = executable
-        process.arguments = options.arguments
+        process.arguments = arguments
         let stdout = Pipe()
         let stderr = Pipe()
         process.standardOutput = stdout
@@ -103,7 +117,7 @@ public struct Engine: Sendable {
             let message = String(decoding: errors, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             throw EngineError.failed(status: process.terminationStatus, message: message)
         }
-        return try Self.decode(output)
+        return output
     }
 
     public static func decode(_ data: Data) throws -> Snapshot {

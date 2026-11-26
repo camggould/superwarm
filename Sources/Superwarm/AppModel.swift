@@ -100,6 +100,11 @@ final class AppModel {
     @ObservationIgnored private let demo: Bool
     @ObservationIgnored private var refreshLoop: Task<Void, Never>?
     @ObservationIgnored private var refreshAgain = false
+    @ObservationIgnored private var lastRemoteSync: Date?
+    @ObservationIgnored private var syncRequested = false
+
+    /// Remote machines are pulled over SSH at most this often (and on demand).
+    static let remoteSyncInterval: TimeInterval = 15 * 60
 
     init(autoRefresh: Bool = true, demo: Bool = false) {
         settings = AppSettings.load()
@@ -129,15 +134,20 @@ final class AppModel {
         defer { isScanning = false }
         repeat {
             refreshAgain = false
+            let syncDue = lastRemoteSync.map { Date().timeIntervalSince($0) > Self.remoteSyncInterval } ?? true
+            let sync = !demo && (syncRequested || syncDue)
+            syncRequested = false
             let options = EngineOptions(
                 gramsCO2PerKWh: settings.gramsCO2PerKWh,
                 pue: settings.pue,
                 commuteMilesOneWay: settings.commuteMilesOneWay,
-                demo: demo
+                demo: demo,
+                sync: sync
             )
             do {
                 snapshot = try await Task.detached(priority: .userInitiated) { try engine.snapshot(options) }.value
                 engineError = nil
+                if sync { lastRemoteSync = Date() }
             } catch {
                 engineError = "\(error)"
             }
@@ -145,11 +155,37 @@ final class AppModel {
         } while refreshAgain
     }
 
+    // MARK: Remote machines
+
+    /// Pulls new usage from remote machines now, instead of waiting for the next scheduled sync.
+    func syncRemotes() async {
+        syncRequested = true
+        await refresh()
+    }
+
+    func addRemote(name: String, ssh: String) async throws {
+        try await runEngine(["remote", "add", name, ssh])
+        await syncRemotes()
+    }
+
+    func removeRemote(_ name: String) async throws {
+        try await runEngine(["remote", "remove", name])
+        await refresh()
+    }
+
+    private func runEngine(_ arguments: [String]) async throws {
+        guard let engine else { throw EngineError.notFound }
+        try await Task.detached(priority: .userInitiated) { try engine.run(arguments) }.value
+    }
+
     // MARK: Derived values for the views
 
     var current: PeriodSnapshot? { snapshot?.period(period) }
 
-    var issues: [String] { (engineError.map { [$0] } ?? []) + (snapshot?.scan.issues ?? []) }
+    var issues: [String] {
+        let remoteErrors = (snapshot?.remotes ?? []).compactMap { r in r.lastError.map { "\(r.name): \($0)" } }
+        return (engineError.map { [$0] } ?? []) + (snapshot?.scan.issues ?? []) + remoteErrors
+    }
 
     var filesFound: Int { snapshot?.scan.filesFound ?? 0 }
 
