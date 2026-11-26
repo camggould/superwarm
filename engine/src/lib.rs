@@ -8,5 +8,7 @@ pub mod citations;
 pub mod claude;
 pub mod codex;
 pub mod emissions;
+pub mod equivalents;
+pub mod format;
 pub mod lines;
 pub mod usage;
