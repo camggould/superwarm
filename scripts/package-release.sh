@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Builds, signs and packages a release into dist/:
-#   Superwarm-<version>.zip   the universal app
-#   SHA256SUMS                checksums, used by scripts/install.sh
-#   appcast.xml               the Sparkle feed, pointing at this release
+# Builds, signs and packages the macOS release assets into dist/:
+#   Superwarm-<version>.zip                            the universal app
+#   superwarm-<version>-universal-apple-darwin.tar.gz  the CLI on its own
+#   SHA256SUMS                                         checksums, used by scripts/install.sh
+#   appcast.xml                                        the Sparkle feed, pointing at this release
+# Linux CLI archives are built by the release workflow on Linux runners.
 #
 # Usage: VERSION=1.2.0 scripts/package-release.sh
 #
@@ -37,7 +39,9 @@ else
 fi
 
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
-(cd dist && shasum -a 256 "$(basename "$ZIP")" > SHA256SUMS)
+CLI_TAR="dist/superwarm-$VERSION-universal-apple-darwin.tar.gz"
+tar -czf "$CLI_TAR" -C "$APP/Contents/Helpers" superwarm
+(cd dist && shasum -a 256 "$(basename "$ZIP")" "$(basename "$CLI_TAR")" > SHA256SUMS)
 
 if [[ -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
   SIGNATURE="$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SPARKLE_BIN/sign_update" --ed-key-file - -p "$ZIP")"
@@ -84,4 +88,4 @@ $NOTES_HTML
 XML
 
 echo "Packaged Superwarm $VERSION ($BUILD_NUMBER):" >&2
-ls -l "$ZIP" dist/SHA256SUMS dist/appcast.xml >&2
+ls -l "$ZIP" "$CLI_TAR" dist/SHA256SUMS dist/appcast.xml >&2

@@ -8,7 +8,53 @@ permissions:
   contents: write
 
 jobs:
+  linux-cli:
+    name: Linux CLI (${{ matrix.target }})
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the engine version matches the tag
+        run: |
+          engine="$(sed -n 's/^version = "\(.*\)"/\1/p' engine/Cargo.toml | head -1)"
+          if [[ "$engine" != "${GITHUB_REF_NAME#v}" ]]; then
+            echo "::error::engine/Cargo.toml is $engine but the tag is $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - name: Install Rust and musl
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq musl-tools
+          rustup toolchain install stable --profile minimal --target ${{ matrix.target }}
+          rustup default stable
+
+      - name: Build a static binary
+        working-directory: engine
+        run: |
+          cargo test
+          cargo build --release --target ${{ matrix.target }}
+          ./target/${{ matrix.target }}/release/superwarm --demo report month
+
+      - name: Archive
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          tar -czf "dist/superwarm-$version-${{ matrix.target }}.tar.gz" -C engine/target/${{ matrix.target }}/release superwarm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: dist/*.tar.gz
+
   release:
+    needs: linux-cli
     runs-on: macos-latest
     env:
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
@@ -67,6 +113,18 @@ jobs:
       - name: Package
         run: VERSION="${GITHUB_REF_NAME#v}" scripts/package-release.sh
 
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: dist
+          merge-multiple: true
+
+      - name: Checksum every asset
+        run: |
+          cd dist
+          shasum -a 256 Superwarm-*.zip superwarm-*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,7 +133,7 @@ jobs:
           flags=()
           if [[ "$version" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "$GITHUB_REF_NAME" \
-            "dist/Superwarm-$version.zip" dist/SHA256SUMS dist/appcast.xml \
+            "dist/Superwarm-$version.zip" dist/superwarm-*.tar.gz dist/SHA256SUMS dist/appcast.xml \
             --title "Superwarm $version" \
             --notes-file "$RUNNER_TEMP/notes.md" \
             --verify-tag "${flags[@]}"
