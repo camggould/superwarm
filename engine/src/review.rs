@@ -88,10 +88,11 @@ impl YearInReview {
             if total <= 0.0 {
                 return None;
             }
-            buckets
-                .iter()
-                .max_by(|a, b| a.1.total_cmp(b.1).then_with(|| b.0.cmp(a.0)))
-                .map(|(name, grams)| Share { name: name.clone(), grams: *grams, fraction: grams / total })
+            buckets.iter().max_by(|a, b| a.1.total_cmp(b.1).then_with(|| b.0.cmp(a.0))).map(|(name, grams)| Share {
+                name: name.clone(),
+                grams: *grams,
+                fraction: grams / total,
+            })
         };
 
         let mut longest = 0;
@@ -103,10 +104,10 @@ impl YearInReview {
             previous = Some(*day);
         }
 
-        let busiest_day = by_day
-            .iter()
-            .max_by(|a, b| a.1.total_cmp(b.1))
-            .map(|(date, grams)| Day { date_ms: local_ms(tz, date.and_hms_opt(0, 0, 0).expect("midnight")), grams: *grams });
+        let busiest_day = by_day.iter().max_by(|a, b| a.1.total_cmp(b.1)).map(|(date, grams)| Day {
+            date_ms: local_ms(tz, date.and_hms_opt(0, 0, 0).expect("midnight")),
+            grams: *grams,
+        });
         let argmax = |values: &[f64]| -> Option<usize> {
             (total > 0.0).then(|| values.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)).map(|(i, _)| i)).flatten()
         };

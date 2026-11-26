@@ -78,10 +78,7 @@ impl ModelOverride {
     }
 
     pub fn load(path: &Path) -> Vec<ModelOverride> {
-        std::fs::read(path)
-            .ok()
-            .and_then(|data| serde_json::from_slice(&data).ok())
-            .unwrap_or_default()
+        std::fs::read(path).ok().and_then(|data| serde_json::from_slice(&data).ok()).unwrap_or_default()
     }
 }
 
@@ -256,9 +253,15 @@ mod tests {
     fn infers_tier() {
         use ModelTier::*;
         for (id, expected) in [
-            ("claude-opus-4-5", Large), ("claude-sonnet-4-5", Medium), ("claude-haiku-4-5", Small),
-            ("gpt-5", Large), ("gpt-4o-mini", Small), ("gpt-4.1-nano", Small), ("o3", Large),
-            ("gemini-2.5-flash", Small), ("codex-auto-review", Unknown),
+            ("claude-opus-4-5", Large),
+            ("claude-sonnet-4-5", Medium),
+            ("claude-haiku-4-5", Small),
+            ("gpt-5", Large),
+            ("gpt-4o-mini", Small),
+            ("gpt-4.1-nano", Small),
+            ("o3", Large),
+            ("gemini-2.5-flash", Small),
+            ("codex-auto-review", Unknown),
         ] {
             assert_eq!(tier(id), expected, "{id}");
         }
@@ -288,7 +291,11 @@ mod tests {
     fn override_wins() {
         let catalog = ModelCatalog::new(
             HashMap::new(),
-            vec![ModelOverride { prefix: "gpt-6".into(), tier: Some(ModelTier::Medium), released: Some("2026-03".into()) }],
+            vec![ModelOverride {
+                prefix: "gpt-6".into(),
+                tier: Some(ModelTier::Medium),
+                released: Some("2026-03".into()),
+            }],
         );
         let profile = catalog.profile("gpt-6-luna", 0);
         assert_eq!(profile.tier, ModelTier::Medium);

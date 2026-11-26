@@ -136,7 +136,8 @@ mod tests {
     #[test]
     fn skips_synthetic_and_non_assistant_lines() {
         assert!(parse_line(line("m", "r", "<synthetic>", 5).as_bytes()).is_none());
-        let user = r#"{"type":"user","timestamp":"2026-11-01T10:00:00Z","message":{"role":"user","content":"hi","usage":{}}}"#;
+        let user =
+            r#"{"type":"user","timestamp":"2026-11-01T10:00:00Z","message":{"role":"user","content":"hi","usage":{}}}"#;
         assert!(parse_line(user.as_bytes()).is_none());
     }
 }

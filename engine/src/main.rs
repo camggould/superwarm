@@ -15,7 +15,11 @@ use superwarm::snapshot::{self, ScanInfo};
 use superwarm::{citations, demo, format};
 
 #[derive(Parser)]
-#[command(name = "superwarm", version, about = "Estimate the carbon footprint of your AI coding agents (Claude Code, Codex) from their local logs.")]
+#[command(
+    name = "superwarm",
+    version,
+    about = "Estimate the carbon footprint of your AI coding agents (Claude Code, Codex) from their local logs."
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -243,7 +247,10 @@ fn print_report(loaded: &Loaded, period: Period, settings: &EquivalentSettings, 
     println!();
     println!("{}{}{}{}g/1k out", pad("Model", 34), pad("Tier", 9), pad("Gen", 12), pad("CO2e", 11));
     for m in report.by_model(range).iter().take(12) {
-        let generation = Local.timestamp_millis_opt(m.profile.generation_ms).single().map_or_else(String::new, |d| d.format("%Y-%m").to_string());
+        let generation = Local
+            .timestamp_millis_opt(m.profile.generation_ms)
+            .single()
+            .map_or_else(String::new, |d| d.format("%Y-%m").to_string());
         let marker = match m.profile.generation_source {
             GenerationSource::FirstSeen => "*",
             GenerationSource::Override => "†",
@@ -310,7 +317,10 @@ fn print_year(r: &YearInReview, report: &UsageReport, settings: &EquivalentSetti
     println!("  Novels' worth    {}", format::count(r.novels_written));
     println!("  Active days      {} (longest streak {})", r.active_days, r.longest_streak);
     if let Some(day) = &r.busiest_day {
-        let date = Local.timestamp_millis_opt(day.date_ms).single().map_or_else(String::new, |d| d.format("%B %-d").to_string());
+        let date = Local
+            .timestamp_millis_opt(day.date_ms)
+            .single()
+            .map_or_else(String::new, |d| d.format("%B %-d").to_string());
         println!("  Heaviest day     {date} ({})", format::grams(day.grams));
     }
     println!("  Night owl        {:.0}% between 10 pm and 6 am", r.night_share * 100.0);

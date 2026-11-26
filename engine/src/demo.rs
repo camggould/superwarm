@@ -28,7 +28,12 @@ impl Rng {
 
 pub fn records<Tz: TimeZone>(now_ms: i64, tz: &Tz) -> Vec<UsageRecord> {
     let mut rng = Rng(2026);
-    let projects = ["/home/demo/code/acme-web", "/home/demo/code/data-pipeline", "/home/demo/code/mobile-app", "/home/demo/code/dotfiles"];
+    let projects = [
+        "/home/demo/code/acme-web",
+        "/home/demo/code/data-pipeline",
+        "/home/demo/code/mobile-app",
+        "/home/demo/code/dotfiles",
+    ];
     let today = crate::report::local_naive(tz, now_ms).date();
     let mut day = NaiveDate::from_ymd_opt(today.year(), 1, 1).expect("jan 1");
     let mut records = Vec::new();

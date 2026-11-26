@@ -129,7 +129,11 @@ impl State {
                         if delta.is_zero() {
                             return; // duplicate event
                         }
-                        if delta.is_negative() { last.unwrap_or(total) } else { delta }
+                        if delta.is_negative() {
+                            last.unwrap_or(total)
+                        } else {
+                            delta
+                        }
                     }
                     None => last.unwrap_or(total),
                 };
@@ -205,7 +209,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let parent = r#"{"timestamp":"2026-10-25T18:22:22Z","type":"session_meta","payload":{"id":"parent","session_id":"parent"}}"#;
         for name in ["rollout-1-aaa.jsonl", "rollout-2-bbb.jsonl"] {
-            std::fs::write(dir.path().join(name), [parent.to_string(), token_count(7, (100, 0, 10), (100, 0, 10))].join("\n")).unwrap();
+            std::fs::write(
+                dir.path().join(name),
+                [parent.to_string(), token_count(7, (100, 0, 10), (100, 0, 10))].join("\n"),
+            )
+            .unwrap();
         }
         let a = parse_file(&dir.path().join("rollout-1-aaa.jsonl")).unwrap();
         let b = parse_file(&dir.path().join("rollout-2-bbb.jsonl")).unwrap();

@@ -296,7 +296,10 @@ mod tests {
     #[test]
     fn grid_and_pue_scale_linearly() {
         let m = EmissionsModel::new(GridSettings { grams_co2_per_kwh: 50.0, pue: 1.1 });
-        let g = m.footprint(&TokenCounts { output: 1000, ..Default::default() }, &profile(&m, ModelTier::Large, 0.0)).co2_grams.central;
+        let g = m
+            .footprint(&TokenCounts { output: 1000, ..Default::default() }, &profile(&m, ModelTier::Large, 0.0))
+            .co2_grams
+            .central;
         assert!(close(g, 0.9 * 1.1 * 0.05));
     }
 }

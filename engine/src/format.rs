@@ -29,7 +29,13 @@ pub fn energy(wh: f64) -> String {
 /// Up to three significant figures (two decimals at most), trailing zeros removed.
 pub fn significant(v: f64) -> String {
     let a = v.abs();
-    let decimals = if a >= 100.0 { 0 } else if a >= 10.0 { 1 } else { 2 };
+    let decimals = if a >= 100.0 {
+        0
+    } else if a >= 10.0 {
+        1
+    } else {
+        2
+    };
     let mut text = format!("{v:.decimals$}");
     if text.contains('.') {
         while text.ends_with('0') {

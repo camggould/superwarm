@@ -104,9 +104,7 @@ pub fn build<Tz: TimeZone>(
         .map(|&period| period_snapshot(report, period, first_record_ms, &equivalent_settings, now_ms, tz))
         .collect();
     let seasonal = seasonal_year(now_ms, tz);
-    let year = review_year
-        .or(seasonal)
-        .unwrap_or_else(|| crate::report::local_naive(tz, now_ms).year());
+    let year = review_year.or(seasonal).unwrap_or_else(|| crate::report::local_naive(tz, now_ms).year());
     Snapshot {
         schema_version: SCHEMA_VERSION,
         engine_version: env!("CARGO_PKG_VERSION"),

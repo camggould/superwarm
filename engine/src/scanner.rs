@@ -122,7 +122,12 @@ impl Scanner {
                         .ok()
                         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                         .map_or(0, |d| d.as_nanos() as i128);
-                    tasks.push(FileTask { provider: source.provider, path: entry.into_path(), size: meta.len(), modified_ns });
+                    tasks.push(FileTask {
+                        provider: source.provider,
+                        path: entry.into_path(),
+                        size: meta.len(),
+                        modified_ns,
+                    });
                 }
             }
         }
@@ -147,7 +152,8 @@ impl Scanner {
                     Provider::ClaudeCode => claude::parse_file(&task.path),
                     Provider::Codex => codex::parse_file(&task.path),
                 };
-                let file = records.map(|records| CachedFile { size: task.size, modified_ns: task.modified_ns, records });
+                let file =
+                    records.map(|records| CachedFile { size: task.size, modified_ns: task.modified_ns, records });
                 (task.path.to_string_lossy().into_owned(), file)
             })
             .collect();
@@ -193,7 +199,9 @@ impl Scanner {
 pub fn deduplicate(records: impl IntoIterator<Item = UsageRecord>) -> Vec<UsageRecord> {
     let mut records: Vec<UsageRecord> = records.into_iter().collect();
     records.sort_by(|a, b| {
-        (a.timestamp_ms, &a.model, &a.project).partial_cmp(&(b.timestamp_ms, &b.model, &b.project)).unwrap_or(std::cmp::Ordering::Equal)
+        (a.timestamp_ms, &a.model, &a.project)
+            .partial_cmp(&(b.timestamp_ms, &b.model, &b.project))
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     let mut by_id: HashMap<String, UsageRecord> = HashMap::with_capacity(records.len());
     for record in records {
@@ -249,7 +257,9 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let line = r#"{"type":"assistant","timestamp":"2026-11-01T10:00:00Z","requestId":"r","message":{"id":"m","model":"claude-opus-4-5","usage":{"output_tokens":10}}}"#;
         std::fs::write(root.path().join("s.jsonl"), line).unwrap();
-        let scanner = Scanner { sources: vec![LogSource { provider: Provider::ClaudeCode, roots: vec![root.path().to_path_buf()] }] };
+        let scanner = Scanner {
+            sources: vec![LogSource { provider: Provider::ClaudeCode, roots: vec![root.path().to_path_buf()] }],
+        };
         let mut cache = ScanCache::default();
         assert_eq!(scanner.scan(&mut cache).files_parsed, 1);
         let second = scanner.scan(&mut cache);

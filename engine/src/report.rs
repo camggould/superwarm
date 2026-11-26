@@ -142,9 +142,7 @@ impl Bucket {
         let naive = match self {
             Bucket::Hour => date.and_hms_opt(local.hour(), 0, 0),
             Bucket::Day => date.and_hms_opt(0, 0, 0),
-            Bucket::Week => {
-                (date - Duration::days(date.weekday().num_days_from_monday() as i64)).and_hms_opt(0, 0, 0)
-            }
+            Bucket::Week => (date - Duration::days(date.weekday().num_days_from_monday() as i64)).and_hms_opt(0, 0, 0),
             Bucket::Month => date.with_day(1).and_then(|d| d.and_hms_opt(0, 0, 0)),
         };
         naive.map_or(ms, |n| local_ms(tz, n))
@@ -189,7 +187,11 @@ impl ModelBreakdown {
     /// Central grams of CO2e per thousand output tokens.
     pub fn grams_per_thousand_output(&self) -> f64 {
         let output = self.summary.tokens.output;
-        if output > 0 { self.summary.footprint.co2_grams.central / output as f64 * 1000.0 } else { 0.0 }
+        if output > 0 {
+            self.summary.footprint.co2_grams.central / output as f64 * 1000.0
+        } else {
+            0.0
+        }
     }
 }
 
@@ -330,7 +332,8 @@ impl UsageReport {
             let mut reference = entry.profile.clone();
             reference.generation_ms = self.model.coefficients.reference_generation_ms;
             let t = entry.record.tokens;
-            let uncached = TokenCounts { input: t.input + t.cache_read + t.cache_write, output: t.output, ..Default::default() };
+            let uncached =
+                TokenCounts { input: t.input + t.cache_read + t.cache_write, output: t.output, ..Default::default() };
             result.actual += entry.footprint.co2_grams.central;
             result.on_reference_models += entry.footprint.baseline_co2_grams;
             result.without_caching += self.model.footprint(&uncached, &reference).co2_grams.central;
@@ -348,8 +351,22 @@ mod tests {
         Utc.with_ymd_and_hms(y, m, d, h, min, 0).unwrap().timestamp_millis()
     }
 
-    fn record(id: &str, timestamp_ms: i64, provider: Provider, model: &str, project: &str, tokens: TokenCounts) -> UsageRecord {
-        UsageRecord { id: id.into(), timestamp_ms, provider, model: model.into(), project: Some(project.into()), tokens }
+    fn record(
+        id: &str,
+        timestamp_ms: i64,
+        provider: Provider,
+        model: &str,
+        project: &str,
+        tokens: TokenCounts,
+    ) -> UsageRecord {
+        UsageRecord {
+            id: id.into(),
+            timestamp_ms,
+            provider,
+            model: model.into(),
+            project: Some(project.into()),
+            tokens,
+        }
     }
 
     fn output(n: u64) -> TokenCounts {
@@ -382,7 +399,9 @@ mod tests {
         let base = ms(2026, 11, 1, 9, 10);
         let records = [0, 20, 70]
             .iter()
-            .map(|m| record(&format!("r{m}"), base + m * 60_000, Provider::ClaudeCode, "claude-opus-4-5", "/p", output(1000)))
+            .map(|m| {
+                record(&format!("r{m}"), base + m * 60_000, Provider::ClaudeCode, "claude-opus-4-5", "/p", output(1000))
+            })
             .collect();
         let points = UsageReport::new(records, EmissionsModel::default(), vec![]).timeline(None, Bucket::Hour, &Utc);
         assert_eq!(points.len(), 2);
