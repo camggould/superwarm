@@ -9,6 +9,8 @@ struct Slide: Identifiable {
         case none
         case equivalents([(String, String, String)])  // symbol, value, label
         case months([Double])
+        /// Horizontal bars: label, grams, emphasised.
+        case waterfall([(String, Double, Bool)])
     }
 
     let id: String
@@ -27,6 +29,7 @@ enum SlideDeck {
     static let lake = Color(red: 0.14, green: 0.33, blue: 0.50)
     static let sand = Color(red: 0.88, green: 0.83, blue: 0.73)
     static let forest = Color(red: 0.14, green: 0.22, blue: 0.16)
+    static let ember = Color(red: 0.40, green: 0.13, blue: 0.09)
 
     static func make(_ r: YearInReview, settings: AppSettings) -> [Slide] {
         guard r.totalGrams > 0 else {
@@ -166,16 +169,34 @@ enum SlideDeck {
             ))
         }
 
-        if r.dividendGrams > 0 {
-            let baseline = fp.baselineCO2Grams
+        let cf = r.counterfactual
+        if cf.onReferenceModels > cf.actual {
+            let times = cf.onReferenceModels / cf.actual
             slides.append(Slide(
-                id: "dividend", background: moss, lightText: true, kicker: "Newer models saved",
-                headline: Format.grams(r.dividendGrams),
-                caption: "\(Int((r.dividendGrams / baseline * 100).rounded()))% less than the same work on 2024-era models. That's the same as skipping:",
+                id: "worse", background: ember, lightText: true, kicker: "On 2024's models, your year would have been",
+                headline: Format.grams(cf.onReferenceModels),
+                caption: "\(friendly(times))× what you actually emitted. Without prompt caching on top, \(Format.grams(cf.withoutCaching)).",
+                accessory: .waterfall([
+                    ("What you emitted", cf.actual, false),
+                    ("Same work on 2024 models", cf.onReferenceModels, true),
+                    ("…and no prompt caching", cf.withoutCaching, true),
+                ])
+            ))
+
+            let saved = cf.onReferenceModels - cf.actual
+            slides.append(Slide(
+                id: "saved", background: moss, lightText: true, kicker: "Because you used newer models, you kept",
+                headline: "\(Format.grams(saved)) out of the air",
+                caption: "\(Int((saved / cf.onReferenceModels * 100).rounded()))% less than the same work in 2024. That's like skipping:",
                 accessory: .equivalents([
-                    item("phone", "iPhone charges", of: r.dividendGrams),
-                    item("shower", "hot showers", of: r.dividendGrams),
-                    item("commute", "commutes", of: r.dividendGrams),
+                    units("flight-nyc-la", of: saved) >= 1
+                        ? item("flight-nyc-la", "flights NYC → LA", of: saved)
+                        : ("airplane", percent(units("flight-nyc-la", of: saved)), "of a flight NYC → LA"),
+                    item("home-day", "days of home power", of: saved),
+                    item("phone", "iPhone charges", of: saved),
+                    item("shower", "hot showers", of: saved),
+                    item("commute", "commutes", of: saved),
+                    item("led-year", "years of a light left on", of: saved),
                 ])
             ))
         }
@@ -271,6 +292,27 @@ struct SlideView: View {
                         Text(label).font(.system(size: 13)).opacity(0.75)
                     }
                     .foregroundStyle(ink)
+                }
+            }
+        case .waterfall(let rows):
+            let top = rows.map(\.1).max() ?? 1
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(rows, id: \.0) { label, grams, emphasised in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(label)
+                            Spacer()
+                            Text(Format.grams(grams)).monospacedDigit().fontWeight(.semibold)
+                        }
+                        .font(.system(size: 14))
+                        .foregroundStyle(ink.opacity(emphasised ? 0.95 : 0.75))
+                        GeometryReader { geo in
+                            Capsule()
+                                .fill(ink.opacity(emphasised ? 0.9 : 0.4))
+                                .frame(width: max(6, geo.size.width * grams / top))
+                        }
+                        .frame(height: 10)
+                    }
                 }
             }
         case .months(let values):
