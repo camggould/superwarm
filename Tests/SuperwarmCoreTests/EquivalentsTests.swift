@@ -27,9 +27,13 @@ import Testing
     }
 
     @Test func formatting() {
-        #expect(Format.grams(0.5) == "0.50 g")
+        #expect(Format.grams(0.5) == "0.5 g")
+        #expect(Format.grams(0) == "0 g")
         #expect(Format.grams(1_234) == "1.23 kg")
-        #expect(Format.energy(wh: 2_500) == "2.50 kWh")
+        #expect(Format.grams(45_590) == "45.6 kg")
+        #expect(Format.grams(266_800) == "267 kg")
+        #expect(Format.grams(10_000) == "10 kg")
+        #expect(Format.energy(wh: 2_500) == "2.5 kWh")
         #expect(Format.count(12_345) == "12.3k")
     }
 }
