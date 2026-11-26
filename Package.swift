@@ -8,12 +8,15 @@ let package = Package(
         .executable(name: "Superwarm", targets: ["Superwarm"]),
         .executable(name: "superwarm-cli", targets: ["superwarm-cli"]),
         .library(name: "SuperwarmCore", targets: ["SuperwarmCore"]),
+        .library(name: "SuperwarmKit", targets: ["SuperwarmKit"]),
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0"),
     ],
     targets: [
         .target(name: "SuperwarmCore"),
+        // Decodes the Rust engine's snapshot and runs the engine binary.
+        .target(name: "SuperwarmKit"),
         .executableTarget(name: "superwarm-cli", dependencies: ["SuperwarmCore"]),
         .executableTarget(
             name: "Superwarm",
@@ -28,5 +31,10 @@ let package = Package(
             ]
         ),
         .testTarget(name: "SuperwarmCoreTests", dependencies: ["SuperwarmCore"]),
+        .testTarget(
+            name: "SuperwarmKitTests",
+            dependencies: ["SuperwarmKit"],
+            resources: [.copy("Fixtures")]
+        ),
     ]
 )
