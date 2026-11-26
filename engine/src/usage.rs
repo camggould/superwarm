@@ -92,6 +92,8 @@ pub struct UsageRecord {
     pub model: String,
     pub project: Option<String>,
     pub tokens: TokenCounts,
+    /// The remote machine this usage came from (`superwarm sync`), or `None` for this machine.
+    pub machine: Option<String>,
 }
 
 impl UsageRecord {

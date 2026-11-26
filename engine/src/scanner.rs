@@ -55,11 +55,12 @@ impl ScanCache {
     /// Bump whenever parsers change what they emit (ids, fields, merging), so
     /// stale cached records are re-parsed instead of silently reused.
     /// 2: Codex record ids are keyed by rollout file rather than session id.
-    pub const VERSION: u32 = 2;
+    /// 3: records carry the machine they came from.
+    pub const VERSION: u32 = 3;
 
     /// `~/Library/Caches/superwarm` on macOS, `~/.cache/superwarm` on Linux.
     pub fn default_path() -> Option<PathBuf> {
-        dirs::cache_dir().map(|d| d.join("superwarm").join("engine-cache-v1.bin"))
+        crate::paths::cache_dir().map(|d| d.join("engine-cache-v1.bin"))
     }
 
     pub fn load(path: &Path) -> ScanCache {
@@ -244,6 +245,7 @@ mod tests {
             model: "x".into(),
             project: None,
             tokens: TokenCounts { output: 10, ..Default::default() },
+            machine: None,
         };
         let mut b = a.clone();
         b.tokens.output = 12;

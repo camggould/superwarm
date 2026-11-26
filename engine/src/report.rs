@@ -340,6 +340,17 @@ impl UsageReport {
         rows
     }
 
+    /// Per machine (`None` is this machine), largest footprint first.
+    pub fn by_machine(&self, range: Option<TimeRange>) -> Vec<(Option<String>, Summary)> {
+        let mut buckets: HashMap<Option<String>, Summary> = HashMap::new();
+        for entry in self.entries_in(range) {
+            buckets.entry(entry.record.machine.clone()).or_default().add(entry);
+        }
+        let mut rows: Vec<(Option<String>, Summary)> = buckets.into_iter().collect();
+        rows.sort_by(|a, b| b.1.footprint.co2_grams.central.total_cmp(&a.1.footprint.co2_grams.central));
+        rows
+    }
+
     /// Central CO2 for the work done on `from`-tier models, and what the same
     /// tokens would have emitted on `to`-tier models of the same generation.
     pub fn what_if(&self, from: ModelTier, to: ModelTier, range: Option<TimeRange>) -> (f64, f64) {
@@ -393,6 +404,7 @@ mod tests {
             model: model.into(),
             project: Some(project.into()),
             tokens,
+            machine: None,
         }
     }
 

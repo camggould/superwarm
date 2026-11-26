@@ -165,6 +165,7 @@ mod tests {
             model: model.into(),
             project: Some(project.into()),
             tokens: TokenCounts { output, ..Default::default() },
+            machine: None,
         }
     }
 

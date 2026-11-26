@@ -146,6 +146,7 @@ mod tests {
             model: "claude-opus-4-5".into(),
             project: Some("/home/me/secret-client-project".into()),
             tokens: TokenCounts { output: 50_000, cache_read: 2_000_000, ..Default::default() },
+            machine: None,
         }];
         let report = UsageReport::new(records, EmissionsModel::default(), vec![]);
         let review = YearInReview::new(&report, 2026, &Utc);

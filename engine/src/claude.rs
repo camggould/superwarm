@@ -79,6 +79,7 @@ pub fn parse_line(line: &[u8]) -> Option<UsageRecord> {
         model,
         project: parsed.cwd,
         tokens,
+        machine: None,
     })
 }
 

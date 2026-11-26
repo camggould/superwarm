@@ -28,6 +28,9 @@ impl Rng {
 
 pub fn records<Tz: TimeZone>(now_ms: i64, tz: &Tz) -> Vec<UsageRecord> {
     let mut rng = Rng(2026);
+    // A separate stream picks which sessions ran on the synthetic remote box,
+    // so adding machines didn't change the demo's usage numbers.
+    let mut machine_rng = Rng(7);
     let projects = [
         "/home/demo/code/acme-web",
         "/home/demo/code/data-pipeline",
@@ -62,6 +65,7 @@ pub fn records<Tz: TimeZone>(now_ms: i64, tz: &Tz) -> Vec<UsageRecord> {
             } else {
                 (Provider::ClaudeCode, "claude-opus-4-5-20251101")
             };
+            let machine = (machine_rng.unit() < 0.35).then(|| "devbox".to_string());
             let mut context = rng.range(20_000, 40_000);
             for _ in 0..rng.range(15, 70) {
                 serial += 1;
@@ -74,6 +78,7 @@ pub fn records<Tz: TimeZone>(now_ms: i64, tz: &Tz) -> Vec<UsageRecord> {
                     model: model.to_string(),
                     project: Some(project.to_string()),
                     tokens: TokenCounts { input: rng.range(1, 40), cache_write: written, cache_read: context, output },
+                    machine: machine.clone(),
                 });
                 context = (context + written + output).min(180_000);
                 time += rng.range(20_000, 140_000) as i64;

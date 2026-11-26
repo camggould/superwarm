@@ -31,6 +31,29 @@ pub struct Snapshot {
     /// Set from December 1 to January 15: the year the review covers.
     pub seasonal_year: Option<i32>,
     pub review: YearInReview,
+    /// This machine's name, for labelling it next to remote machines.
+    pub local_machine: String,
+    /// Remote machines whose usage is included, with their sync status.
+    pub remotes: Vec<RemoteStatus>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteStatus {
+    pub name: String,
+    /// The ssh target, or `None` for machines added with `superwarm import`.
+    pub ssh: Option<String>,
+    pub last_sync_ms: Option<i64>,
+    pub last_error: Option<String>,
+    pub responses: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MachineRow {
+    pub name: String,
+    pub is_local: bool,
+    pub summary: Summary,
 }
 
 #[derive(Serialize, Default)]
@@ -58,6 +81,8 @@ pub struct PeriodSnapshot {
     pub tier_tip: Option<TierTip>,
     /// Ids of the three headline equivalents for this period's total.
     pub headline: Vec<&'static str>,
+    /// Usage per machine, largest first. One entry when there are no remotes.
+    pub machines: Vec<MachineRow>,
 }
 
 #[derive(Serialize)]
@@ -89,6 +114,13 @@ pub struct TierTip {
     pub all_opus: bool,
 }
 
+/// Who and what the snapshot covers besides the logs themselves.
+pub struct Context {
+    pub local_machine: String,
+    pub remotes: Vec<RemoteStatus>,
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn build<Tz: TimeZone>(
     report: &UsageReport,
     scan: ScanInfo,
@@ -96,12 +128,25 @@ pub fn build<Tz: TimeZone>(
     review_year: Option<i32>,
     now_ms: i64,
     tz: &Tz,
+    context: Context,
 ) -> Snapshot {
     let grid = report.model.grid;
     let first_record_ms = report.first_record_ms();
     let periods = Period::ALL
         .iter()
-        .map(|&period| period_snapshot(report, period, first_record_ms, &equivalent_settings, now_ms, tz))
+        .map(|&period| {
+            let mut snapshot = period_snapshot(report, period, first_record_ms, &equivalent_settings, now_ms, tz);
+            snapshot.machines = report
+                .by_machine(snapshot.range)
+                .into_iter()
+                .map(|(name, summary)| MachineRow {
+                    is_local: name.is_none(),
+                    name: name.unwrap_or_else(|| context.local_machine.clone()),
+                    summary,
+                })
+                .collect();
+            snapshot
+        })
         .collect();
     let seasonal = seasonal_year(now_ms, tz);
     let year = review_year.or(seasonal).unwrap_or_else(|| crate::report::local_naive(tz, now_ms).year());
@@ -119,6 +164,8 @@ pub fn build<Tz: TimeZone>(
         coefficients: report.model.coefficients.clone(),
         seasonal_year: seasonal,
         review: YearInReview::new(report, year, tz),
+        local_machine: context.local_machine,
+        remotes: context.remotes,
     }
 }
 
@@ -178,5 +225,6 @@ pub fn period_snapshot<Tz: TimeZone>(
         previous,
         tier_tip,
         headline,
+        machines: Vec::new(),
     }
 }

@@ -147,6 +147,8 @@ pub struct ReportView<'a, Tz: TimeZone> {
     pub period: &'a PeriodSnapshot,
     pub settings: &'a EquivalentSettings,
     pub projects: Vec<ProjectBreakdown>,
+    /// (label, summary) per machine; the section shows when there's more than one.
+    pub machines: Vec<(String, crate::report::Summary)>,
     pub first_record_ms: Option<i64>,
     pub now_ms: i64,
     pub tz: &'a Tz,
@@ -279,6 +281,24 @@ pub fn report<Tz: TimeZone>(ui: &Ui, v: &ReportView<Tz>) -> String {
                 pad_left(&format::grams(m.summary.footprint.co2_grams.central), 8),
                 pad_left(&format!("{:.2}", m.grams_per_thousand_output), 8),
                 ui.provider(m.provider, &bar(share, bar_width))
+            );
+        }
+    }
+
+    // Machines
+    if v.machines.len() > 1 {
+        let name_width = v.machines.iter().map(|(n, _)| width_of(n)).max().unwrap_or(10).clamp(10, 28);
+        let bar_width = ui.bar_width(name_width + 20);
+        let _ = writeln!(out, "\n {}", ui.bold("By machine"));
+        for (name, summary) in &v.machines {
+            let g = summary.footprint.co2_grams.central;
+            let share = if grams > 0.0 { g / grams } else { 0.0 };
+            let _ = writeln!(
+                out,
+                "     {}  {}  {}",
+                pad(name, name_width),
+                pad_left(&format::grams(g), 8),
+                ui.accent(&bar(share, bar_width))
             );
         }
     }
@@ -565,6 +585,7 @@ mod tests {
                 model: if i % 2 == 0 { "claude-opus-4-5".into() } else { "gpt-5".into() },
                 project: Some(format!("/code/app{}", i % 2)),
                 tokens: TokenCounts { output: 1000, cache_read: 50_000, ..Default::default() },
+                machine: if i < 2 { None } else { Some("devbox".into()) },
             })
             .collect();
         UsageReport::new(records, EmissionsModel::default(), vec![])
@@ -598,6 +619,11 @@ mod tests {
             period: &period,
             settings: &settings,
             projects: report.by_project(period.range),
+            machines: report
+                .by_machine(period.range)
+                .into_iter()
+                .map(|(m, s)| (m.unwrap_or_else(|| "laptop".into()), s))
+                .collect(),
             first_record_ms: report.first_record_ms(),
             now_ms: now,
             tz: &Utc,

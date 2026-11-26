@@ -73,8 +73,7 @@ impl ModelOverride {
     /// `~/Library/Application Support/Superwarm/models.json` on macOS,
     /// `~/.config/superwarm/models.json` on Linux.
     pub fn default_path() -> Option<PathBuf> {
-        let name = if cfg!(target_os = "macos") { "Superwarm" } else { "superwarm" };
-        dirs::config_dir().map(|d| d.join(name).join("models.json"))
+        crate::paths::config_dir().map(|d| d.join("models.json"))
     }
 
     pub fn load(path: &Path) -> Vec<ModelOverride> {

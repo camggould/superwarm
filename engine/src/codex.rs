@@ -150,6 +150,7 @@ impl State {
                     model: self.model.clone(),
                     project: self.cwd.clone(),
                     tokens,
+                    machine: None,
                 });
             }
             _ => {}
