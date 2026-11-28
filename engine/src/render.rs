@@ -362,15 +362,13 @@ fn timeline<Tz: TimeZone>(ui: &Ui, v: &ReportView<Tz>, out: &mut String) {
     if starts.is_empty() {
         return;
     }
-    let mut by_start: std::collections::HashMap<i64, (f64, f64)> = std::collections::HashMap::new();
+    // Grams per tool, in `Provider::ALL` order, for each bucket.
+    let mut by_start: std::collections::HashMap<i64, [f64; Provider::ALL.len()]> = std::collections::HashMap::new();
     for point in &p.timeline {
-        let entry = by_start.entry(point.start_ms).or_default();
-        match point.provider {
-            Provider::ClaudeCode => entry.0 += point.co2_grams,
-            Provider::Codex => entry.1 += point.co2_grams,
-        }
+        let slot = Provider::ALL.iter().position(|&q| q == point.provider).expect("every provider is in ALL");
+        by_start.entry(point.start_ms).or_default()[slot] += point.co2_grams;
     }
-    let totals: Vec<f64> = starts.iter().map(|s| by_start.get(s).map_or(0.0, |(a, b)| a + b)).collect();
+    let totals: Vec<f64> = starts.iter().map(|s| by_start.get(s).map_or(0.0, |g| g.iter().sum())).collect();
     let max = totals.iter().cloned().fold(0.0, f64::max);
     if max <= 0.0 {
         return;
@@ -388,12 +386,20 @@ fn timeline<Tz: TimeZone>(ui: &Ui, v: &ReportView<Tz>, out: &mut String) {
         let label_width = starts.iter().map(|s| width_of(&bucket_label(p.bucket, *s, v.tz))).max().unwrap_or(6);
         let bar_width = ui.bar_width(label_width + 18);
         for start in &starts {
-            let (claude, codex) = by_start.get(start).copied().unwrap_or_default();
-            let total = claude + codex;
+            let grams = by_start.get(start).copied().unwrap_or_default();
+            let total: f64 = grams.iter().sum();
             let cells = ((total / max) * bar_width as f64).round() as usize;
-            let claude_cells = if total > 0.0 { ((claude / total) * cells as f64).round() as usize } else { 0 };
-            let mut drawn = ui.provider(Provider::ClaudeCode, &"█".repeat(claude_cells));
-            drawn.push_str(&ui.provider(Provider::Codex, &"█".repeat(cells - claude_cells)));
+            let mut drawn = String::new();
+            if total > 0.0 {
+                // Round the running total, not each segment, so segments always add up to `cells`.
+                let (mut sum, mut used) = (0.0, 0);
+                for (provider, g) in Provider::ALL.into_iter().zip(grams) {
+                    sum += g;
+                    let end = ((sum / total) * cells as f64).round() as usize;
+                    drawn.push_str(&ui.provider(provider, &"█".repeat(end - used)));
+                    used = end;
+                }
+            }
             if cells == 0 && total > 0.0 {
                 drawn = ui.dim("▏");
             }
@@ -407,14 +413,9 @@ fn timeline<Tz: TimeZone>(ui: &Ui, v: &ReportView<Tz>, out: &mut String) {
                 pad_left(&value, 8)
             );
         }
-        let _ = writeln!(
-            out,
-            "   {} {}   {} {}",
-            ui.provider(Provider::ClaudeCode, "█"),
-            ui.dim("Claude Code"),
-            ui.provider(Provider::Codex, "█"),
-            ui.dim("Codex")
-        );
+        let legend: Vec<String> =
+            Provider::ALL.iter().map(|&q| format!("{} {}", ui.provider(q, "█"), ui.dim(q.display_name()))).collect();
+        let _ = writeln!(out, "   {}", legend.join("   "));
     } else {
         // Too many buckets for rows: a sparkline with its ends and peak labelled.
         let line = sparkline(&totals);
