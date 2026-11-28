@@ -39,12 +39,15 @@ pub struct ExportHeader {
 }
 
 /// One response in an export. Projects are folder names, never full paths.
+///
+/// `provider` is kept as its key so that a newer machine's export, carrying a
+/// tool this build doesn't know yet, still imports everything else.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ExportRecord {
     id: String,
     timestamp_ms: i64,
-    provider: Provider,
+    provider: String,
     model: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     project: Option<String>,
@@ -77,7 +80,7 @@ pub fn write_export(
         let line = ExportRecord {
             id: r.id.clone(),
             timestamp_ms: r.timestamp_ms,
-            provider: r.provider,
+            provider: r.provider.key().to_string(),
             model: r.model.clone(),
             project: if include_projects { r.project.as_deref().map(folder_name) } else { None },
             tokens: r.tokens,
@@ -109,10 +112,11 @@ pub fn read_export(reader: impl BufRead, machine: Option<&str>) -> Result<(Expor
         }
         let r: ExportRecord =
             serde_json::from_str(&line).with_context(|| format!("export line {} is malformed", index + 2))?;
+        let Some(provider) = Provider::from_key(&r.provider) else { continue };
         records.push(UsageRecord {
             id: format!("{machine}/{}", r.id),
             timestamp_ms: r.timestamp_ms,
-            provider: r.provider,
+            provider,
             model: r.model,
             project: r.project,
             tokens: r.tokens,
@@ -377,6 +381,18 @@ mod tests {
         );
         let error = read_export(std::io::Cursor::new(newer.into_bytes()), None).unwrap_err();
         assert!(error.to_string().contains("update both machines"));
+    }
+
+    #[test]
+    fn skips_tools_this_build_does_not_know() {
+        let mut buf = Vec::new();
+        write_export(&[record("a", 100, None)], None, false, "m", 0, &mut buf).unwrap();
+        let mut text = String::from_utf8(buf).unwrap();
+        text.push_str(r#"{"id":"z","timestampMs":200,"provider":"someFutureTool","model":"x","tokens":{"input":0,"cacheWrite":0,"cacheRead":0,"output":5}}"#);
+        text.push('\n');
+        let (_, imported) = read_export(std::io::Cursor::new(text.into_bytes()), None).unwrap();
+        assert_eq!(imported.len(), 1);
+        assert_eq!(imported[0].id, "m/a");
     }
 
     #[test]

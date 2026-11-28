@@ -22,6 +22,11 @@ impl Provider {
         }
     }
 
+    /// The inverse of [`Provider::key`]; `None` for a tool this build doesn't know.
+    pub fn from_key(key: &str) -> Option<Provider> {
+        Provider::ALL.into_iter().find(|p| p.key() == key)
+    }
+
     pub fn key(self) -> &'static str {
         match self {
             Provider::ClaudeCode => "claudeCode",
@@ -116,6 +121,15 @@ mod tests {
         assert_eq!(parse_timestamp("2026-11-01T10:00:00Z"), Some(1_793_527_200_000));
         assert_eq!(parse_timestamp("2026-11-01T10:00:00.123Z"), Some(1_793_527_200_123));
         assert_eq!(parse_timestamp("not a date"), None);
+    }
+
+    #[test]
+    fn provider_keys_round_trip() {
+        for provider in Provider::ALL {
+            assert_eq!(Provider::from_key(provider.key()), Some(provider));
+            assert_eq!(serde_json::to_value(provider).unwrap(), provider.key());
+        }
+        assert_eq!(Provider::from_key("someFutureTool"), None);
     }
 
     #[test]
