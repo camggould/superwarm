@@ -163,13 +163,19 @@ a Linux workstation, a remote dev box, a cloud VM.
 | `superwarm year [YEAR]` | Your year in carbon (below). `--card card.svg` also writes the shareable summary card. |
 | `superwarm export` / `import` | Move usage between machines by hand (see [Remote machines](#remote-machines)). |
 | `superwarm remote add\|list\|remove`, `superwarm sync` | Pull usage from your other machines over SSH. |
+| `superwarm settings` | Your saved grid, PUE and commute. `superwarm settings --commute 16.4` saves a new default; `--reset` goes back to the built-in ones. |
 | `superwarm sources` | Every published source behind the numbers. |
 | `superwarm snapshot` | Everything, as one JSON document (what the macOS app reads). |
 
 Options for any command: `--grid <g/kWh>` (default 373, the US average),
-`--pue`, `--commute <miles>`, `--local-only`, `--color auto|always|never`
+`--pue`, `--commute <miles>` override the saved settings for one run;
+`--local-only`, `--color auto|always|never`
 (colour is off when piped or when `NO_COLOR` is set), `--demo` for synthetic
 data, `--no-cache`.
+
+Settings live in `settings.json` in `~/.config/superwarm` (Linux) or
+`~/Library/Application Support/Superwarm` (macOS), where the app keeps them too,
+so the app and the CLI give the same numbers.
 
 On macOS the app bundles the same CLI:
 `ln -sf ~/Applications/Superwarm.app/Contents/Helpers/superwarm ~/.local/bin/superwarm`.

@@ -7,13 +7,14 @@ use std::io::{BufReader, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use superwarm::catalog::ModelOverride;
-use superwarm::emissions::{EmissionsModel, GridSettings, GRID_US_AVERAGE};
+use superwarm::emissions::{EmissionsModel, GridSettings};
 use superwarm::equivalents::EquivalentSettings;
 use superwarm::remote::{self, Remote, RemoteConfig, RemoteStore};
 use superwarm::render::{self, ReportView, Ui, YearView};
 use superwarm::report::{local_naive, Period, UsageReport};
 use superwarm::review::{seasonal_year, YearInReview};
 use superwarm::scanner::{ScanCache, ScanResult, Scanner};
+use superwarm::settings::{Effective, Settings};
 use superwarm::snapshot::{self, RemoteStatus, ScanInfo};
 use superwarm::usage::UsageRecord;
 use superwarm::{citations, demo, paths};
@@ -88,6 +89,15 @@ enum Command {
     },
     /// The published sources behind every number
     Sources,
+    /// Show the saved defaults for --grid, --pue and --commute, or save new ones:
+    /// `superwarm settings --commute 16.4`
+    Settings {
+        /// Forget the saved values and use the built-in defaults
+        #[arg(long)]
+        reset: bool,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -112,15 +122,15 @@ enum RemoteCommand {
 
 #[derive(Args, Clone)]
 struct Options {
-    /// Grid carbon intensity in g CO2e per kWh (default: US average, 373)
-    #[arg(long, global = true, default_value_t = GRID_US_AVERAGE)]
-    grid: f64,
-    /// Data-centre Power Usage Effectiveness
-    #[arg(long, global = true, default_value_t = 1.15)]
-    pue: f64,
-    /// One-way commute in miles, for the commute comparison
-    #[arg(long, global = true, default_value_t = 11.7)]
-    commute: f64,
+    /// Grid carbon intensity in g CO2e per kWh [saved setting, or US average: 373]
+    #[arg(long, global = true)]
+    grid: Option<f64>,
+    /// Data-centre Power Usage Effectiveness [saved setting, or 1.15]
+    #[arg(long, global = true)]
+    pue: Option<f64>,
+    /// One-way commute in miles, for the commute comparison [saved setting, or 11.7]
+    #[arg(long, global = true)]
+    commute: Option<f64>,
     /// Model overrides file (default: platform config dir/superwarm/models.json)
     #[arg(long, global = true)]
     overrides: Option<PathBuf>,
@@ -255,7 +265,33 @@ struct Loaded {
     seconds: f64,
 }
 
+impl Options {
+    /// The values given as flags, for this run only.
+    fn flags(&self) -> Settings {
+        Settings {
+            grid_grams_per_kwh: self.grid,
+            pue: self.pue,
+            commute_miles_one_way: self.commute,
+            ..Default::default()
+        }
+    }
+
+    /// Flags, then saved settings, then built-in defaults. Demo data ignores
+    /// saved settings, so its output (README images, fixtures) is the same everywhere.
+    fn effective(&self) -> Result<Effective> {
+        let flags = self.flags();
+        flags.validate()?;
+        let saved = match Settings::default_path() {
+            Some(path) if !self.demo => Settings::load(&path)
+                .context("saved settings can't be used; fix the file, or run `superwarm settings --reset`")?,
+            _ => Settings::default(),
+        };
+        Ok(saved.resolve(&flags))
+    }
+}
+
 fn load(options: &Options, now_ms: i64) -> Result<Loaded> {
+    let effective = options.effective()?;
     let started = Instant::now();
     let scan = if options.demo {
         let records = demo::records(now_ms, &Local);
@@ -293,7 +329,8 @@ fn load(options: &Options, now_ms: i64) -> Result<Loaded> {
         .or_else(ModelOverride::default_path)
         .map(|path| ModelOverride::load(&path))
         .unwrap_or_default();
-    let model = EmissionsModel::new(GridSettings { grams_co2_per_kwh: options.grid, pue: options.pue });
+    let model =
+        EmissionsModel::new(GridSettings { grams_co2_per_kwh: effective.grid_grams_per_kwh, pue: effective.pue });
     records.sort_by_key(|r| r.timestamp_ms);
     let local = scan.records.clone();
     let report = UsageReport::new(records, model, overrides);
@@ -345,8 +382,12 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let now_ms = Local::now().timestamp_millis();
     let options = &cli.options;
-    let settings = EquivalentSettings { commute_miles_one_way: options.commute };
-    match cli.command.unwrap_or(Command::Report { period: PeriodArg::Month, json: false }) {
+    let command = cli.command.unwrap_or(Command::Report { period: PeriodArg::Month, json: false });
+    if let Command::Settings { reset, json } = command {
+        return settings_command(options, reset, json);
+    }
+    let settings = EquivalentSettings { commute_miles_one_way: options.effective()?.commute_miles_one_way };
+    match command {
         Command::Sources => {
             for c in citations::ALL {
                 println!("{} ({}, {})\n  {}\n  {}\n", c.title, c.publisher, c.year, c.url, c.used_for);
@@ -439,6 +480,7 @@ fn main() -> Result<()> {
             );
         }
         Command::Remote(command) => remote_command(command, now_ms)?,
+        Command::Settings { .. } => unreachable!("handled above"),
         Command::Sync { name, json } => {
             let outcomes = sync_all(name.as_deref(), now_ms)?;
             if json {
@@ -585,6 +627,49 @@ fn format_thousands(n: usize) -> String {
         out.push(c);
     }
     out
+}
+
+/// `superwarm settings [--grid G] [--pue P] [--commute M] [--reset]`
+fn settings_command(options: &Options, reset: bool, json: bool) -> Result<()> {
+    let path = Settings::default_path().context("no config directory on this system")?;
+    let changes = options.flags();
+    changes.validate()?;
+    if reset || !changes.is_empty() {
+        // A broken file is replaced rather than blocking the fix.
+        let mut saved = Settings::load(&path).unwrap_or_default();
+        if reset {
+            saved = Settings { other: saved.other, ..Default::default() };
+        }
+        saved.apply(&changes);
+        saved.save(&path)?;
+    }
+    let saved = Settings::load(&path)?;
+    let effective = saved.resolve(&Settings::default());
+    if json {
+        println!("{}", serde_json::to_string_pretty(&effective)?);
+        return Ok(());
+    }
+    let ui = ui(options.color);
+    let source = |is_saved: bool| ui.dim(if is_saved { "saved" } else { "default" });
+    println!();
+    println!(" {}  {}", ui.bold("Settings"), ui.dim(&path.display().to_string()));
+    println!(
+        "   Grid      {:<22} {}",
+        format!("{} g CO₂e/kWh", effective.grid_grams_per_kwh),
+        source(saved.grid_grams_per_kwh.is_some())
+    );
+    println!("   PUE       {:<22} {}", effective.pue, source(saved.pue.is_some()));
+    println!(
+        "   Commute   {:<22} {}",
+        format!("{} mi one way", effective.commute_miles_one_way),
+        source(saved.commute_miles_one_way.is_some())
+    );
+    println!();
+    println!(
+        " {}",
+        ui.dim("Save with `superwarm settings --commute 16.4`; for one run, pass the flag to any command.")
+    );
+    Ok(())
 }
 
 #[cfg(test)]
