@@ -6,6 +6,8 @@ All notable changes to Superwarm are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1]
+
 ### Added
 
 - **Antigravity.** Superwarm now reads Google Antigravity's CLI (`agy`) conversations from `~/.gemini/antigravity-cli`, in the app, the CLI and remote syncs. Antigravity is drawn in jade, a third chart colour checked for colour-blind separation against the other two.
@@ -19,6 +21,7 @@ All notable changes to Superwarm are documented here. The format follows
 
 ### Fixed
 
+- The terminal showed response counts with a decimal ("1.0 responses"); they now read "1 response", "1,497 responses".
 - Gemini models were all sized as small models, because "gemini" contains "mini". Pro models are now large, Flash small, and the Gemini 4 line (Carbon, Neon, Hydrogen) large, medium and small. Gemini 2.5, 3 and 4 Neon release months are in the model catalogue.
 
 ## [0.2.0]
@@ -58,6 +61,7 @@ First public release.
 - `superwarm-cli` for terminal reports.
 - Automatic, signed in-app updates.
 
-[Unreleased]: https://github.com/camggould/superwarm/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/camggould/superwarm/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/camggould/superwarm/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/camggould/superwarm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/camggould/superwarm/releases/tag/v0.1.0
