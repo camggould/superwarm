@@ -112,6 +112,12 @@ const ENTRIES: &[(&str, i32, u32)] = &[
     ("gpt-5", 2025, 8),
     ("gpt-5-codex", 2025, 9),
     ("gpt-5.1", 2025, 11),
+    // Google
+    ("gemini-2.5-pro", 2025, 3),
+    ("gemini-2.5-flash", 2025, 4),
+    ("gemini-3-pro", 2025, 11),
+    ("gemini-3-flash", 2025, 12),
+    ("gemini-4-neon", 2026, 11),
 ];
 
 static SORTED_ENTRIES: LazyLock<Vec<(&'static str, i32, u32)>> = LazyLock::new(|| {
@@ -145,6 +151,19 @@ pub fn normalize(model: &str) -> String {
 }
 
 pub fn tier(id: &str) -> ModelTier {
+    // Checked first: "gemini" contains "mini". Gemini 4 names its tiers after
+    // elements: Carbon (largest), Neon, Hydrogen (fastest).
+    if id.starts_with("gemini-") {
+        return if ["flash", "lite", "hydrogen", "nano"].iter().any(|m| id.contains(m)) {
+            ModelTier::Small
+        } else if id.contains("neon") {
+            ModelTier::Medium
+        } else if ["pro", "ultra", "carbon"].iter().any(|m| id.contains(m)) {
+            ModelTier::Large
+        } else {
+            ModelTier::Unknown
+        };
+    }
     const SMALL: [&str; 9] = ["haiku", "mini", "nano", "flash", "lite", "small", "8b", "7b", "3b"];
     if SMALL.iter().any(|m| id.contains(m)) {
         return ModelTier::Small;
@@ -260,6 +279,11 @@ mod tests {
             ("gpt-4.1-nano", Small),
             ("o3", Large),
             ("gemini-2.5-flash", Small),
+            ("gemini-2.5-pro", Large),
+            ("gemini-3-pro-preview", Large),
+            ("gemini-4-carbon", Large),
+            ("gemini-4-neon", Medium),
+            ("gemini-4-hydrogen", Small),
             ("codex-auto-review", Unknown),
         ] {
             assert_eq!(tier(id), expected, "{id}");

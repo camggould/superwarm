@@ -68,7 +68,8 @@ both studies with room to spare.
 ### Model size: `m_tier`
 
 Vendors don't publish parameter counts, so models are bucketed by product line
-(Opus / flagship = large, Sonnet = medium, Haiku / mini / nano / flash = small).
+(Opus / Pro / Gemini Carbon / flagship = large, Sonnet / Gemini Neon = medium,
+Haiku / mini / nano / flash / Gemini Hydrogen = small).
 The multipliers follow API pricing as a proxy for serving compute, the same
 argument Epoch uses for GPT-4o-mini. Medium models cost ~0.4–0.6× and small
 ones ~0.1–0.2× per output token. Measured open-model energy per token

@@ -6,6 +6,10 @@ All notable changes to Superwarm are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Gemini models were all sized as small models, because "gemini" contains "mini". Pro models are now large, Flash small, and the Gemini 4 line (Carbon, Neon, Hydrogen) large, medium and small. Gemini 2.5, 3 and 4 Neon release months are in the model catalogue.
+
 ## [0.2.0]
 
 ### Added
