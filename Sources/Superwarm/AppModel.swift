@@ -26,7 +26,8 @@ enum GridPreset: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-/// User preferences, persisted as JSON in UserDefaults.
+/// User preferences. The estimate settings (grid, PUE, commute) are shared with
+/// the CLI through `settings.json`; the rest are app-only, in UserDefaults.
 struct AppSettings: Codable, Equatable {
     var gridPreset: GridPreset = .usAverage
     var customGramsPerKWh: Double = 373
@@ -50,15 +51,55 @@ struct AppSettings: Codable, Equatable {
 
     static let key = "settings.v1"
 
+    /// The app's preferences with the shared file's values on top, so a change
+    /// made with `superwarm settings` shows up here. The first launch after an
+    /// update copies the app's existing values into the shared file.
     static func load() -> AppSettings {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let settings = try? JSONDecoder().decode(AppSettings.self, from: data)
-        else { return AppSettings() }
-        return settings
+        let stored = UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(AppSettings.self, from: $0) }
+        var settings = stored ?? AppSettings()
+        switch SharedSettings.read(from: AppPaths.sharedSettings) {
+        case .values(let shared): settings.apply(shared)
+        case .missing: if stored != nil { settings.writeShared() }
+        case .invalid: settings.writeShared()  // the CLI would refuse it too; repair it
+        }
+        return settings.clamped()
     }
 
     func save() {
+        saveLocal()
+        writeShared()
+    }
+
+    /// The app's own copy only: used when the change came from the shared file.
+    func saveLocal() {
         if let data = try? JSONEncoder().encode(self) { UserDefaults.standard.set(data, forKey: Self.key) }
+    }
+
+    private func writeShared() {
+        try? SharedSettings.write(.init(grid: gramsCO2PerKWh, pue: pue, commute: commuteMilesOneWay), to: AppPaths.sharedSettings)
+    }
+
+    /// Takes the shared values, mapping a grid intensity back to its preset.
+    mutating func apply(_ shared: SharedSettings.Values) {
+        if let pue = shared.pue { self.pue = pue }
+        if let commute = shared.commute { commuteMilesOneWay = commute }
+        if let grid = shared.grid, grid != gramsCO2PerKWh {
+            if let preset = GridPreset.allCases.first(where: { $0 != .custom && $0.gramsCO2PerKWh == grid }) {
+                gridPreset = preset
+            } else {
+                gridPreset = .custom
+                customGramsPerKWh = grid
+            }
+        }
+    }
+
+    /// Within the ranges the engine accepts, so a stray value typed in Settings can't stop it.
+    func clamped() -> AppSettings {
+        var s = self
+        s.customGramsPerKWh = min(max(customGramsPerKWh, SharedSettings.gridRange.lowerBound), SharedSettings.gridRange.upperBound)
+        s.pue = min(max(pue, SharedSettings.pueRange.lowerBound), SharedSettings.pueRange.upperBound)
+        s.commuteMilesOneWay = min(max(commuteMilesOneWay, SharedSettings.commuteRange.lowerBound), SharedSettings.commuteRange.upperBound)
+        return s
     }
 }
 
@@ -71,6 +112,9 @@ enum AppPaths {
 
     /// Read by the engine too (its default overrides path on macOS).
     static var modelOverrides: URL { supportDirectory.appendingPathComponent("models.json") }
+
+    /// Estimate settings shared with the CLI (`superwarm settings`).
+    static var sharedSettings: URL { supportDirectory.appendingPathComponent("settings.json") }
 
     /// The Swift engine's cache from 0.1.x, superseded by the Rust engine's own
     /// cache in ~/Library/Caches/superwarm. Removed once to free ~15 MB.
@@ -85,8 +129,14 @@ final class AppModel {
     var period: Period = .today
     var settings: AppSettings {
         didSet {
+            // Never assign `settings` in here: with @Observable that re-enters
+            // the setter (and this observer) until the stack overflows.
             guard settings != oldValue else { return }
-            settings.save()
+            if applyingSharedSettings {
+                settings.clamped().saveLocal()  // the loop's next refresh uses the new values
+                return
+            }
+            settings.clamped().save()
             Task { await refresh() }
         }
     }
@@ -102,6 +152,7 @@ final class AppModel {
     @ObservationIgnored private var refreshAgain = false
     @ObservationIgnored private var lastRemoteSync: Date?
     @ObservationIgnored private var syncRequested = false
+    @ObservationIgnored private var applyingSharedSettings = false
 
     /// Remote machines are pulled over SSH at most this often (and on demand).
     static let remoteSyncInterval: TimeInterval = 15 * 60
@@ -114,10 +165,20 @@ final class AppModel {
         AppPaths.removeLegacyCache()
         refreshLoop = Task { [weak self] in
             while !Task.isCancelled {
+                self?.reloadSharedSettings()
                 await self?.refresh()
                 try? await Task.sleep(for: .seconds(60))
             }
         }
+    }
+
+    /// Picks up changes made with `superwarm settings` (the refresh that follows uses them).
+    private func reloadSharedSettings() {
+        let fresh = AppSettings.load()
+        guard fresh != settings else { return }
+        applyingSharedSettings = true
+        settings = fresh
+        applyingSharedSettings = false
     }
 
     /// Runs the engine with the current settings and replaces the snapshot.
@@ -137,10 +198,11 @@ final class AppModel {
             let syncDue = lastRemoteSync.map { Date().timeIntervalSince($0) > Self.remoteSyncInterval } ?? true
             let sync = !demo && (syncRequested || syncDue)
             syncRequested = false
+            let values = settings.clamped()  // a half-typed value in Settings can't stop the engine
             let options = EngineOptions(
-                gramsCO2PerKWh: settings.gramsCO2PerKWh,
-                pue: settings.pue,
-                commuteMilesOneWay: settings.commuteMilesOneWay,
+                gramsCO2PerKWh: values.gramsCO2PerKWh,
+                pue: values.pue,
+                commuteMilesOneWay: values.commuteMilesOneWay,
                 demo: demo,
                 sync: sync
             )

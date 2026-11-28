@@ -15,6 +15,7 @@ All notable changes to Superwarm are documented here. The format follows
 ### Changed
 
 - The terminal chart's legend lists only the tools used in that period.
+- The macOS app keeps grid, PUE and commute in the same `settings.json` as the CLI, so the two always agree. Changes made with `superwarm settings` show up in the app within a minute, and existing app settings move over on first launch. Values typed in Settings are kept within the ranges the engine accepts.
 
 ### Fixed
 
