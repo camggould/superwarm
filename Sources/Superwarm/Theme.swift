@@ -23,15 +23,19 @@ enum Theme {
     // MARK: Chart series
     // Categorical slots validated with the data-viz palette checker against the
     // native popover surface (#ECECEC light / #323232 dark): lightness band,
-    // chroma floor, CVD ΔE ≥ 19, normal-vision ΔE ≥ 25, contrast ≥ 3:1.
+    // chroma floor, contrast ≥ 3:1. Across all three pairs the worst CVD ΔE is
+    // 10.0 light / 10.2 dark (jade vs clay) and normal-vision ΔE 16.7 / 16.5
+    // (jade vs lake).
     static let lake = dynamic(light: 0x2B6CA3, dark: 0x4A90D0)
     static let ochreClay = dynamic(light: 0xC2682A, dark: 0xD47F3D)
+    static let jade = dynamic(light: 0x1B9673, dark: 0x1AB28C)
 
     /// Fixed by entity, never by rank.
     static func color(for provider: Provider) -> Color {
         switch provider {
         case .claudeCode: lake
         case .codex: ochreClay
+        case .antigravity: jade
         }
     }
 }

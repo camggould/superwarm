@@ -8,7 +8,12 @@ All notable changes to Superwarm are documented here. The format follows
 
 ### Added
 
+- **Antigravity.** Superwarm now reads Google Antigravity's CLI (`agy`) conversations from `~/.gemini/antigravity-cli`, in the app, the CLI and remote syncs. Antigravity is drawn in jade, a third chart colour checked for colour-blind separation against the other two.
 - A laptop one version behind its remote now imports everything it understands from a sync, instead of failing on a tool it doesn't know.
+
+### Changed
+
+- The terminal chart's legend lists only the tools used in that period.
 
 ### Fixed
 

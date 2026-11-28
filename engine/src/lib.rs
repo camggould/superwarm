@@ -1,8 +1,9 @@
 //! Superwarm's engine: estimates the energy and carbon footprint of AI coding
-//! agents (Claude Code, Codex) from the token counts in their local logs.
+//! agents (Claude Code, Codex, Antigravity) from the token counts in their local logs.
 //!
 //! The model and every coefficient are documented in docs/METHODOLOGY.md.
 
+pub mod antigravity;
 pub mod card;
 pub mod catalog;
 pub mod citations;

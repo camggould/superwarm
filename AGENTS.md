@@ -96,10 +96,11 @@ ssh binary (see `engine/tests/remote_sync.rs`).
   and look at the PNGs before committing. Tests don't cover views.
 - Keep the popover quiet: system font, native controls, few words. Detail
   belongs in tooltips, the methodology window or Year in Carbon.
-- Chart series colours (`Theme.lake`, `Theme.ochreClay`) passed a colour-vision
+- Chart series colours (`Theme.lake`, `Theme.ochreClay`, `Theme.jade`) passed a colour-vision
   palette validator against the native popover surfaces. Don't change them,
   or add series, without re-validating. Text never uses series colours.
-- Colour follows the entity: Claude Code is always lake blue, Codex clay.
+- Colour follows the entity: Claude Code is always lake blue, Codex clay,
+  Antigravity jade. The terminal uses ANSI blue, yellow and cyan.
 
 ### Privacy
 

@@ -51,6 +51,7 @@ impl Ui {
         match provider {
             Provider::ClaudeCode => self.paint("34", t),
             Provider::Codex => self.paint("33", t),
+            Provider::Antigravity => self.paint("36", t),
         }
     }
 
@@ -413,8 +414,12 @@ fn timeline<Tz: TimeZone>(ui: &Ui, v: &ReportView<Tz>, out: &mut String) {
                 pad_left(&value, 8)
             );
         }
-        let legend: Vec<String> =
-            Provider::ALL.iter().map(|&q| format!("{} {}", ui.provider(q, "█"), ui.dim(q.display_name()))).collect();
+        // Only the tools used in this period: most people run one or two.
+        let legend: Vec<String> = Provider::ALL
+            .into_iter()
+            .filter(|&q| p.timeline.iter().any(|point| point.provider == q && point.co2_grams > 0.0))
+            .map(|q| format!("{} {}", ui.provider(q, "█"), ui.dim(q.display_name())))
+            .collect();
         let _ = writeln!(out, "   {}", legend.join("   "));
     } else {
         // Too many buckets for rows: a sparkline with its ends and peak labelled.

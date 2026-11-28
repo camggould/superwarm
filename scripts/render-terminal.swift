@@ -25,7 +25,7 @@ func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> NSColor {
 let background = color(0x1F1C19)
 let chrome = color(0x2B2724)
 let foreground = color(0xE6E1D8)
-let palette: [Int: NSColor] = [31: color(0xE0855C), 32: color(0x9CBF84), 33: color(0xE8B04A), 34: color(0x6CA0D8)]
+let palette: [Int: NSColor] = [31: color(0xE0855C), 32: color(0x9CBF84), 33: color(0xE8B04A), 34: color(0x6CA0D8), 36: color(0x1AB28C)]
 
 struct Style {
     var bold = false

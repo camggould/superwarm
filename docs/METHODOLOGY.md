@@ -14,6 +14,7 @@ and the `superwarm` CLI run the same engine.
 |---|---|---|
 | Claude Code | `~/.claude/projects/**/*.jsonl` | The `usage` block of each API response. One response is logged once per content block, so lines are merged by message id + request id. |
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl[.zst]` | The growth in the running `total_token_usage` between `token_count` events. A resumed session starts from `last_token_usage`, so inherited history isn't counted twice. Records are keyed by rollout file, because forked and subagent rollouts can reuse their parent's session id. |
+| Antigravity | `~/.gemini/antigravity-cli/conversations/*.db` | One SQLite database per conversation. Each model step's metadata carries a protobuf usage block (uncached input, output including thinking, cache reads and writes) and a timestamp; the model id comes from the conversation's generation metadata. Recent steps often live only in the write-ahead log, so the database and its `-wal` are copied and read together. Records are keyed by API response id. |
 
 Tokens are split into four kinds because they cost very different amounts of compute:
 

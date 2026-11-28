@@ -4,12 +4,13 @@ import Foundation
 // (engine/src/snapshot.rs). Field names match the engine's camelCase keys.
 
 public enum Provider: String, Codable, Sendable, CaseIterable, Hashable {
-    case claudeCode, codex
+    case claudeCode, codex, antigravity
 
     public var displayName: String {
         switch self {
         case .claudeCode: "Claude Code"
         case .codex: "Codex"
+        case .antigravity: "Antigravity"
         }
     }
 }

@@ -10,15 +10,17 @@ use std::ops::{Add, AddAssign};
 pub enum Provider {
     ClaudeCode,
     Codex,
+    Antigravity,
 }
 
 impl Provider {
-    pub const ALL: [Provider; 2] = [Provider::ClaudeCode, Provider::Codex];
+    pub const ALL: [Provider; 3] = [Provider::ClaudeCode, Provider::Codex, Provider::Antigravity];
 
     pub fn display_name(self) -> &'static str {
         match self {
             Provider::ClaudeCode => "Claude Code",
             Provider::Codex => "Codex",
+            Provider::Antigravity => "Antigravity",
         }
     }
 
@@ -31,6 +33,7 @@ impl Provider {
         match self {
             Provider::ClaudeCode => "claudeCode",
             Provider::Codex => "codex",
+            Provider::Antigravity => "antigravity",
         }
     }
 }

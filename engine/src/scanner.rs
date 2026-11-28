@@ -1,7 +1,7 @@
 //! Finds log files, parses changed ones in parallel, and caches the results.
 
 use crate::usage::{Provider, UsageRecord};
-use crate::{claude, codex};
+use crate::{antigravity, claude, codex};
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,8 @@ pub struct LogSource {
 
 impl LogSource {
     /// Default locations, honouring `CLAUDE_CONFIG_DIR` (comma-separated) and `CODEX_HOME`.
+    /// Antigravity's CLI (`agy`) keeps its data in `~/.gemini/antigravity-cli`; the
+    /// editor app's `~/.gemini/antigravity` is read too, in case it uses the same layout.
     pub fn defaults() -> Vec<LogSource> {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         let claude_roots = match std::env::var("CLAUDE_CONFIG_DIR") {
@@ -32,6 +34,13 @@ impl LogSource {
             LogSource {
                 provider: Provider::Codex,
                 roots: vec![codex_home.join("sessions"), codex_home.join("archived_sessions")],
+            },
+            LogSource {
+                provider: Provider::Antigravity,
+                roots: vec![
+                    home.join(".gemini/antigravity-cli/conversations"),
+                    home.join(".gemini/antigravity/conversations"),
+                ],
             },
         ]
     }
@@ -114,21 +123,24 @@ impl Scanner {
             for root in source.roots.iter().filter(|r| r.exists()) {
                 for entry in walkdir::WalkDir::new(root).into_iter().filter_map(Result::ok) {
                     let name = entry.file_name().to_string_lossy();
-                    if !(name.ends_with(".jsonl") || name.ends_with(".jsonl.zst")) || !entry.file_type().is_file() {
+                    let wanted = match source.provider {
+                        Provider::ClaudeCode | Provider::Codex => {
+                            name.ends_with(".jsonl") || name.ends_with(".jsonl.zst")
+                        }
+                        Provider::Antigravity => name.ends_with(".db"),
+                    };
+                    if !wanted || !entry.file_type().is_file() {
                         continue;
                     }
-                    let Ok(meta) = entry.metadata() else { continue };
-                    let modified_ns = meta
-                        .modified()
-                        .ok()
-                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                        .map_or(0, |d| d.as_nanos() as i128);
-                    tasks.push(FileTask {
-                        provider: source.provider,
-                        path: entry.into_path(),
-                        size: meta.len(),
-                        modified_ns,
-                    });
+                    let Some((mut size, mut modified_ns)) = stamp(entry.path()) else { continue };
+                    if source.provider == Provider::Antigravity {
+                        // New responses land in the -wal file first; the .db alone can look unchanged.
+                        if let Some((wal_size, wal_modified)) = stamp(&antigravity::wal_path(entry.path())) {
+                            size += wal_size;
+                            modified_ns = modified_ns.max(wal_modified);
+                        }
+                    }
+                    tasks.push(FileTask { provider: source.provider, path: entry.into_path(), size, modified_ns });
                 }
             }
         }
@@ -152,6 +164,7 @@ impl Scanner {
                 let records = match task.provider {
                     Provider::ClaudeCode => claude::parse_file(&task.path),
                     Provider::Codex => codex::parse_file(&task.path),
+                    Provider::Antigravity => antigravity::parse_file(&task.path),
                 };
                 let file =
                     records.map(|records| CachedFile { size: task.size, modified_ns: task.modified_ns, records });
@@ -190,6 +203,14 @@ impl Scanner {
             issues: summarize(issues),
         }
     }
+}
+
+/// A file's size and modification time (ns since the epoch), the cache's change check.
+fn stamp(path: &Path) -> Option<(u64, i128)> {
+    let meta = std::fs::metadata(path).ok()?;
+    let modified_ns =
+        meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos() as i128);
+    Some((meta.len(), modified_ns))
 }
 
 /// The same response can be logged in several files (a resumed Claude Code
@@ -271,5 +292,22 @@ mod tests {
         let path = root.path().join("cache.bin");
         cache.save(&path).unwrap();
         assert_eq!(ScanCache::load(&path).files.len(), 1);
+    }
+
+    #[test]
+    fn antigravity_rescans_when_only_its_wal_grows() {
+        use crate::antigravity::tests::{add_step, conversation, step};
+        let root = tempfile::tempdir().unwrap();
+        let conn = conversation(&root.path().join("c.db"));
+        add_step(&conn, 0, &step(1_795_873_338, "a", 10, 0, 5));
+        let scanner = Scanner {
+            sources: vec![LogSource { provider: Provider::Antigravity, roots: vec![root.path().to_path_buf()] }],
+        };
+        let mut cache = ScanCache::default();
+        let first = scanner.scan(&mut cache);
+        assert_eq!((first.files_found, first.records.len()), (1, 1), "the -wal file isn't a log of its own");
+        add_step(&conn, 1, &step(1_795_873_340, "b", 10, 0, 5));
+        let second = scanner.scan(&mut cache);
+        assert_eq!((second.files_parsed, second.records.len()), (1, 2));
     }
 }

@@ -6,7 +6,7 @@
 
 **The carbon footprint of your AI coding agents, in your menu bar or terminal.**
 
-Superwarm reads the token counts Claude Code and Codex already log on your machine,<br>
+Superwarm reads the token counts Claude Code, Codex and Antigravity already log on your machine,<br>
 turns them into evidence-backed energy and CO₂e estimates, and shows<br>
 how much newer, more efficient models are saving.
 
@@ -98,7 +98,7 @@ rm -rf ~/.local/bin/superwarm ~/.cache/superwarm
   your home's electricity.
 - **How you compare:** against the same work on 2024-era models, against the
   previous period, and what smaller models could save.
-- **A chart** by hour, day, week or month, split by Claude Code and Codex,
+- **A chart** by hour, day, week or month, split by tool (Claude Code, Codex, Antigravity),
   plus a per-model breakdown.
 
 ### Year in Carbon
@@ -228,6 +228,7 @@ If `superwarm` isn't in the remote's `~/.local/bin` or on its PATH, point to it:
 |---|---|
 | [Claude Code](https://www.anthropic.com/claude-code) | `~/.claude/projects` (or `$CLAUDE_CONFIG_DIR`) |
 | [Codex](https://github.com/openai/codex) | `~/.codex/sessions` and `archived_sessions` (or `$CODEX_HOME`). |
+| [Antigravity](https://antigravity.google) (`agy`) | `~/.gemini/antigravity-cli/conversations`. Read from a private copy, so a running `agy` is never disturbed. |
 
 Want another tool supported? [Open an issue](https://github.com/camggould/superwarm/issues)
 with an example of its log format.

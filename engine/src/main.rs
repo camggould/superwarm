@@ -22,7 +22,7 @@ use superwarm::{citations, demo, paths};
 #[command(
     name = "superwarm",
     version,
-    about = "Estimate the carbon footprint of your AI coding agents (Claude Code, Codex) from their local logs.",
+    about = "Estimate the carbon footprint of your AI coding agents (Claude Code, Codex, Antigravity) from their local logs.",
     after_help = "Remote machines: run `superwarm remote add NAME user@host`, then `superwarm sync`.\nDocs: https://github.com/camggould/superwarm"
 )]
 struct Cli {
